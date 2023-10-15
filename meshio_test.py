@@ -10,26 +10,29 @@
 
 
 import os
+import matplotlib.pyplot as plt
 
-import gmsh
-import meshio
-import numpy as np
+from utilizes import get_filelist
+from mesh import MeshLoader
 
-
-def get_filelist(dir):
-    Filelist = []
-    for home, dirs, files in os.walk(dir):
-        for filename in files:
-            # 文件名列表，包含完整路径
-            if filename.endswith('.msh'):
-                Filelist.append(os.path.join(home, filename))
-            # # 文件名列表，只包含文件名
-            # Filelist.append( filename)
-    return Filelist
 
 msh_path = os.path.join('data', 'raw_mesh')
-
 msh_files = get_filelist(msh_path)
+
+
 for file in msh_files:
-    mesh = meshio.read(file)
+    msh_model = MeshLoader(file)
+    plt.scatter(msh_model.points[:, 0], msh_model.points[:, 1], s=0.1)
+    plt.scatter(msh_model.get_point_sets('airfoil')[0][:, 0],
+                msh_model.get_point_sets('airfoil')[0][:, 1], s=0.1)
+    plt.scatter(msh_model.get_point_sets('inlet')[0][:, 0],
+                msh_model.get_point_sets('inlet')[0][:, 1], s=0.1)
+    plt.scatter(msh_model.get_point_sets('outlet')[0][:, 0],
+                msh_model.get_point_sets('outlet')[0][:, 1], s=0.1)
+    plt.show()
+
+
+
+
+
 
