@@ -9,19 +9,20 @@
 """
 from model import bkd, nn
 from model.networks import FourierEmbedding, MlpNet
-from model.pinn import BasicModule
+from model.pinn import BasicSolver, BaseEvaluator
 from model.autograd import jacobian
 from model.lossfuncs import get as get_loss
 
 loss_func = get_loss('mse')
 
-class NavierStokes2D(BasicModule):
+class NavierStokes2DSolver(BasicSolver):
     def __init__(self, config):
         # super(NavierStokes2D, self).__init__()
 
         self.config_setup(config)
         self.loss_dict = {}
         self.ntk_dict = {}
+        self.total_loss = 1e20
 
     def forward(self, inn_var):
         out_var = self.input_transform(inn_var)
@@ -64,10 +65,11 @@ class NavierStokes2D(BasicModule):
 
     def losses(self, batch):
 
-        ic_batch = batch["ic"]
+        ics_batch = batch["ics"]
         inflow_batch = batch["inflow"]
         outflow_batch = batch["outflow"]
-        noslip_batch = batch["noslip"]
+        wall_batch = batch["wall"]
+        cylinder_batch = batch["cylinder"]
         res_batch = batch["res"]
 
         # residual loss
@@ -80,11 +82,11 @@ class NavierStokes2D(BasicModule):
         res_loss_c = loss_func(res_pred[..., (2,)], 0)
 
         # initial condition loss
-        ic_input, ic_true = ic_batch['input'], ic_batch['target']
-        ic_pred = self.forward(inn_var=ic_input)
-        ic_loss_p = loss_func(ic_pred[..., (0,)], ic_true[..., (0,)])
-        ic_loss_u = loss_func(ic_pred[..., (1,)], ic_true[..., (1,)])
-        ic_loss_v = loss_func(ic_pred[..., (2,)], ic_true[..., (2,)])
+        ics_input, ics_true = ics_batch['input'], ics_batch['target']
+        ics_pred = self.forward(inn_var=ics_input)
+        ics_loss_p = loss_func(ics_pred[..., (0,)], ics_true[..., (0,)])
+        ics_loss_u = loss_func(ics_pred[..., (1,)], ics_true[..., (1,)])
+        ics_loss_v = loss_func(ics_pred[..., (2,)], ics_true[..., (2,)])
 
         # inflow loss
         inflow_input, inflow_true = inflow_batch['input'], inflow_batch['target']
@@ -100,30 +102,37 @@ class NavierStokes2D(BasicModule):
         outflow_loss_u = loss_func(outflow_res[..., (0,)], 0)
         outflow_loss_v = loss_func(outflow_res[..., (1,)], 0)
 
-        # noslip loss
-        noslip_input = noslip_batch['input']
-        noslip_pred = self.forward(inn_var=noslip_input)
-        # noslip_true = ic_batch['target']
-        noslip_loss_u = loss_func(noslip_pred[..., (1,)], 0)
-        noslip_loss_v = loss_func(noslip_pred[..., (2,)], 0)
+        # wall loss
+        wall_input = wall_batch['input']
+        wall_pred = self.forward(inn_var=wall_input)
+        wall_loss_u = loss_func(wall_pred[..., (1,)], 0)
+        wall_loss_v = loss_func(wall_pred[..., (2,)], 0)
+
+        # wall loss
+        cylinder_input = cylinder_batch['input']
+        cylinder_pred = self.forward(inn_var=cylinder_input)
+        cylinder_loss_u = loss_func(cylinder_pred[..., (1,)], 0)
+        cylinder_loss_v = loss_func(cylinder_pred[..., (2,)], 0)
 
 
-        loss_dict = {
-            "p_ic": ic_loss_p,
-            "u_ic": ic_loss_u,
-            "v_ic": ic_loss_v,
+        self.loss_dict.update({
+            "p_ic": ics_loss_p,
+            "u_ic": ics_loss_u,
+            "v_ic": ics_loss_v,
             "u_in": inflow_loss_u,
             "v_in": inflow_loss_v,
             "u_out": outflow_loss_u,
             "v_out": outflow_loss_v,
-            "u_noslip": noslip_loss_u,
-            "v_noslip": noslip_loss_v,
+            "u_wall": wall_loss_u,
+            "v_wall": wall_loss_v,
+            "u_cylinder": cylinder_loss_u,
+            "v_cylinder": cylinder_loss_v,
             "r_x": res_loss_x,
             "r_y": res_loss_y,
             "r_c": res_loss_c,
-        }
+        })
 
-        return loss_dict
+        return self.loss_dict
 
     def config_setup(self, config):
 
@@ -131,7 +140,9 @@ class NavierStokes2D(BasicModule):
             config.network.input_transform = FourierEmbedding(**config.network.fourier_emb)
 
         self.net_model = MlpNet(**config.network)
-        self.loss_weights = dict(config.weighting.init_weights)
+
+        super().config_setup(config)
+
         # Non-dimensionalized domain length and width
         self.L, self.W, self.T = config.physics.L, config.physics.W, config.physics.T
         self.Re = config.physics.Re  # Reynolds number
@@ -160,12 +171,17 @@ class NavierStokes2D(BasicModule):
         out_var[..., (1,)] = out_var[..., (1,)] + 4 * 1.5 * y_hat * (0.41 - y_hat) / (0.41**2)
         return out_var
 
+class NavierStokes2DEvaluator(BaseEvaluator):
+    def __int__(self, config, model):
+        super().__int__(self, config, model)
+        pass
+
 
 if __name__ == "__main__":
 
-    from config import get_config
+    from all_config import get_config
     config = get_config()
-    pinn_cyl = NavierStokes2D(config)
+    pinn_cyl = NavierStokes2DSolver(config)
     x = bkd.ones([100, 50, 3])
     x.requires_grad_(True)
     y = pinn_cyl(x)

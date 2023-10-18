@@ -22,9 +22,8 @@ def get_config():
     wandb.name = "default"
     wandb.tag = None
 
-    # Nondimensionalization
+    # Normalization
     config.nondim = True
-
     # Physics
     config.physics = physics = ml_collections.ConfigDict()
     physics.L = 1.0
@@ -35,6 +34,7 @@ def get_config():
     # Arch
     config.network = network = ml_collections.ConfigDict()
     network.arch_name = "ModifiedMlp"
+    network.device = "cuda:0"
     network.input_dim = 3
     network.layer_depth = 4
     network.layer_width = 256
@@ -50,18 +50,22 @@ def get_config():
 
     # Optim
     config.optim = optim = ml_collections.ConfigDict()
-    optim.optimizer = "Adam"
-    optim.beta1 = 0.9
-    optim.beta2 = 0.999
-    optim.eps = 1e-8
-    optim.learning_rate = 1e-3
-    optim.decay_rate = 0.9
-    optim.decay_steps = 2000
-    optim.grad_accum_steps = 0
+    optim.optimizer = ml_collections.ConfigDict()
+    optim.optimizer.name = "Adam"
+    optim.optimizer.params = ml_collections.ConfigDict()
+    optim.optimizer.params.betas = (0.9, 0.999)
+    optim.optimizer.params.eps = 1e-8
+    optim.optimizer.params.lr = 1e-3
+    optim.optimizer.params.weight_decay = 0.0
+    optim.scheduler = ml_collections.ConfigDict()
+    optim.scheduler.name = "StepLR"
+    optim.scheduler.params = ml_collections.ConfigDict()
+    optim.scheduler.params.gamma = 0.9
+    optim.scheduler.params.step_size = 2000
 
     # Training
     config.training = training = ml_collections.ConfigDict()
-    training.max_steps = 200000
+    training.max_epoch = 200000
     training.num_time_windows = 10
 
     training.inflow_batch_size = 2048
@@ -72,7 +76,7 @@ def get_config():
 
     # Weighting
     config.weighting = weighting = ml_collections.ConfigDict()
-    weighting.scheme = "grad_norm"
+    weighting.scheme = "gdn"
     weighting.init_weights = {
         "u_ic": 1.0,
         "v_ic": 1.0,
@@ -81,11 +85,13 @@ def get_config():
         "v_in": 1.0,
         "u_out": 1.0,
         "v_out": 1.0,
-        "u_noslip": 1.0,
-        "v_noslip": 1.0,
-        "ru": 1.0,
-        "rv": 1.0,
-        "rc": 1.0,
+        "u_wall": 1.0,
+        "v_wall": 1.0,
+        "u_cylinder": 1.0,
+        "v_cylinder": 1.0,
+        "r_x": 1.0,
+        "r_y": 1.0,
+        "r_c": 1.0,
     }
 
     weighting.momentum = 0.9
@@ -101,9 +107,9 @@ def get_config():
     logging.log_errors = True
     logging.log_losses = True
     logging.log_weights = True
-    logging.log_grads = False
+    logging.log_gdn = False
     logging.log_ntk = False
-    logging.log_preds = False
+    logging.log_preds = True
 
     # Saving
     config.saving = saving = ml_collections.ConfigDict()

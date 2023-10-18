@@ -22,7 +22,7 @@ class FourierEmbedding(nn.Module):
         self.output_dim = output_dim
         self.fourier_weight = nn.Parameter(self.scale * bkd.rand(input_dim, hidden_dim * self.modes, dtype=bkd.float32))
         self.linear = nn.Linear(hidden_dim * 2 * self.modes, output_dim)
-        self.modes_harmonic = bkd.arange(0, self.modes, 1)
+        self.register_buffer(name='modes_harmonic', tensor=bkd.arange(0, self.modes, 1))
     def forward(self, x):
         bsz = list(x.shape[:-1])
         h = bkd.matmul(x, self.fourier_weight)

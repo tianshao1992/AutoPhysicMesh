@@ -9,9 +9,29 @@
 """
 
 
-__all__ = ["jacobian", "hessian"]
+__all__ = ["gradient", "jacobian", "hessian"]
+# from model import bkd
 import torch
 backend_name = "pytorch"
+
+def gradient(y, xs, grad_outputs=None, retain_graph=None, create_graph=False):
+    '''
+    Compute the gradient of `outputs` with respect to `inputs`
+
+    gradient(x.sum(), x)
+    gradient((x * y).sum(), [x, y])
+    '''
+    if bkd.is_tensor(xs):
+        inputs = [xs]
+    else:
+        inputs = list(xs)
+    grads = torch.autograd.grad(y, xs, grad_outputs,
+                              allow_unused=True,
+                              retain_graph=retain_graph,
+                              create_graph=create_graph)
+    grads = [x if x is not None else torch.zeros_like(y) for x, y in zip(grads, inputs)]
+    return grads
+
 
 class Jacobian(object):
     """Compute Jacobian matrix J: J[i][j] = dy_i/dx_j, where i = 0, ..., dim_y-1 and
