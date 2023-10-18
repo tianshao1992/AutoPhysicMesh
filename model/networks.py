@@ -9,20 +9,18 @@
 """
 
 from model import bkd, nn
-import activations
-
+from model import activations
 
 class FourierEmbedding(nn.Module):
 
     def __init__(self, input_dim, hidden_dim, output_dim, scale=1.0, modes=1):
         super(FourierEmbedding, self).__init__()
-        # assert hidden_dim // 2, "hidden_dim must be odd number!"
         self.scale = scale
-        self.modes = modes
+        self.modes = modes + 1
         self.hidden_dim = hidden_dim
         self.input_dim = input_dim
         self.output_dim = output_dim
-        self.fourier_weight = nn.Parameter(self.scale * bkd.rand(input_dim, hidden_dim * modes, dtype=bkd.float32))
+        self.fourier_weight = nn.Parameter(self.scale * bkd.rand(input_dim, hidden_dim * self.modes, dtype=bkd.float32))
         self.linear = nn.Linear(hidden_dim * 2 * self.modes, output_dim)
         self.modes_harmonic = bkd.arange(0, self.modes, 1)
     def forward(self, x):
@@ -40,13 +38,14 @@ class MlpNet(nn.Module):
     def __init__(self,
                  input_dim: int,
                  output_dim: int,
-                 depth: int,
-                 width: int,
-                 activation: str,
-                 modified_mode: bool,
+                 layer_depth: int,
+                 layer_width: int,
+                 layer_active: str,
+                 modified_mode: bool = False,
                  input_transform: callable = None,
                  output_transform: callable = None,
-                 use_one_branch: bool = True):
+                 use_one_branch: bool = True,
+                 *args, **kwargs):
         super(MlpNet, self).__init__()
 
         # =============================================================================
@@ -57,36 +56,36 @@ class MlpNet(nn.Module):
 
         self.input_dim = input_dim
         self.output_dim = output_dim
-        self.depth = depth
-        self.width = width
-        self.active = activations.get(activation)
+        self.layer_depth = layer_depth
+        self.layer_width = layer_width
+        self.layer_active = activations.get(layer_active)
         self.modified_mode = modified_mode
         self.input_transform = input_transform
         self.output_transform = output_transform
         self.use_one_branch = use_one_branch
 
         if input_transform is None:
-            self.input_transform = MlpBlock(planes=[self.input_dim, self.width],
-                                            activation=activation, last_activation=True)
+            self.input_transform = MlpBlock(planes=[self.input_dim, self.layer_width],
+                                            active=layer_active, last_active=True)
 
         if modified_mode:
-            self.modified_transform = MlpBlock(planes=[self.width, self.width*2],
-                                               activation=activation, last_activation=True)
+            self.modified_transform = MlpBlock(planes=[self.layer_width, self.layer_width*2],
+                                               active=layer_active, last_active=True)
 
-        self.MlpBlock = MlpBlock(planes=[width, ] * depth + [output_dim, ],
-                                 activation=activation,
-                                 last_activation=False,
+        self.MlpBlock = MlpBlock(planes=[layer_width, ] * layer_depth + [output_dim, ],
+                                 active=layer_active,
+                                 last_active=False,
                                  use_one_branch=use_one_branch)
 
     def forward(self, x):
 
-        x = self.input_transform(x)
+        h = self.input_transform(x)
         if self.modified_mode:
-            u = bkd.chunk(self.modified_transform(x), chunks=2, dim=-1)
+            u = bkd.chunk(self.modified_transform(h), chunks=2, dim=-1)
         else:
             u = None
 
-        y = self.MlpBlock(x, u)
+        y = self.MlpBlock(h, u)
 
         if self.output_transform is not None:
             y = self.output_transform(y)
@@ -94,8 +93,8 @@ class MlpNet(nn.Module):
 
 
 class MlpBlock(nn.Module):
-    def __init__(self, planes: list, activation="gelu",
-                 last_activation=False,
+    def __init__(self, planes: list, active="gelu",
+                 last_active=False,
                  use_one_branch=True):
         # =============================================================================
         #     Inspired by Haghighat Ehsan, et all.
@@ -104,8 +103,8 @@ class MlpBlock(nn.Module):
         # =============================================================================
         super(MlpBlock, self).__init__()
         self.planes = planes
-        self.active = activations.get(activation)
-        self.last_activation = last_activation
+        self.active = activations.get(active)
+        self.last_active = last_active
         self.use_one_branch = use_one_branch
 
         self.layers = nn.ModuleList()
@@ -148,7 +147,7 @@ class MlpBlock(nn.Module):
                     assert u[0].shape == x.shape and u[1].shape == x.shape, "u and x must have the same shape"
                     x = x * u[0] + (1 - x) * u[1]
             y = self.layers[-1](x)
-            if self.last_activation:
+            if self.last_active:
                 y = self.active(y)
             return y
         else:
@@ -162,20 +161,20 @@ class MlpBlock(nn.Module):
                     if u is not None:
                         y = y * u[0] + (1 - y) * u[1]
                 y = self.layers[i][-1](y)
-                if self.last_activation:
+                if self.last_active:
                     y = self.active(y)
                 ys.append(y)
             return bkd.cat(ys, dim=-1)
 
 
 if __name__ == "__main__":
-    model = MlpBlock([3, 64, 64, 3], activation="gelu", last_activation=False, use_one_branch=True)
+    model = MlpBlock([3, 64, 64, 3], active="gelu", last_active=False, use_one_branch=True)
     print(model)
     x = bkd.ones([100, 50, 3])
     y = model(x)
     print(y.shape)
 
-    model = MlpBlock([3, 64, 64, 3], activation="gelu", last_activation=True, use_one_branch=False)
+    model = MlpBlock([3, 64, 64, 3], active="gelu", last_active=True, use_one_branch=False)
     print(model)
     x = bkd.ones([100, 50, 3])
     y = model(x)
@@ -190,9 +189,9 @@ if __name__ == "__main__":
 
     model = MlpNet(input_dim=3,
                    output_dim=2,
-                   depth=5,
-                   width=64,
-                   activation='gelu',
+                   layer_depth=5,
+                   layer_width=64,
+                   layer_active='gelu',
                    modified_mode=True,)
     #
     x = bkd.ones([100, 50, 3])
@@ -201,9 +200,9 @@ if __name__ == "__main__":
 
     model = MlpNet(input_dim=3,
                    output_dim=2,
-                   depth=5,
-                   width=64,
-                   activation='gelu',
+                   layer_depth=5,
+                   layer_width=64,
+                   layer_active='gelu',
                    modified_mode=True,
                    input_transform=FourierEmbedding(input_dim=3, hidden_dim=4, output_dim=64, scale=1.0))
     #

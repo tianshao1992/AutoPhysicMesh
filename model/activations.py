@@ -12,12 +12,11 @@ __all__ = ['get']
 
 from model import bkd, nn
 
-dicts = {'gelu': nn.GELU(), 'silu': nn.SiLU(), 'relu': nn.ReLU(), 'leakyrelu': nn.LeakyReLU(),
-         'elu': nn.ELU(), 'selu': nn.SELU(), 'celu': nn.CELU(), 'hardshrink': nn.Hardshrink(),
-         'tanh': nn.Tanh(), 'sigmoid': nn.Sigmoid(), 'softplus': nn.Softplus(), 'softsign': nn.Softsign(),
-         'swish': nn.SiLU(), 'mish': nn.Mish(), 'logsigmoid': nn.LogSigmoid(), 'softmin': nn.Softmin(),
-         'sin': bkd.sin, 'cos': bkd.cos,
-         None: nn.SiLU()}
+DICT = {'gelu': nn.GELU(), 'silu': nn.SiLU(), 'relu': nn.ReLU(), 'leakyrelu': nn.LeakyReLU(),
+        'elu': nn.ELU(), 'selu': nn.SELU(), 'celu': nn.CELU(), 'hardshrink': nn.Hardshrink(),
+        'tanh': nn.Tanh(), 'sigmoid': nn.Sigmoid(), 'softplus': nn.Softplus(), 'softsign': nn.Softsign(),
+        'swish': nn.SiLU(), 'mish': nn.Mish(), 'logsigmoid': nn.LogSigmoid(), 'softmin': nn.Softmin(),
+        'sin': bkd.sin, 'cos': bkd.cos}
 
 def linear(x):
     # linear activation function
@@ -43,7 +42,7 @@ def get(identifier):
     if identifier is None:
         return linear
     if isinstance(identifier, str):
-        return dicts[identifier]
+        return DICT[identifier]
     if callable(identifier):
         return identifier
     raise TypeError(
@@ -52,9 +51,6 @@ def get(identifier):
 
 
 if __name__ == "__main__":
-
-    import numpy as np
-    import torch
 
     x = bkd.ones((3, 4), dtype=bkd.float32)
     print(x)
