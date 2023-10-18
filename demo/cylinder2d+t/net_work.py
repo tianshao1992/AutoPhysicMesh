@@ -10,7 +10,7 @@
 from model import bkd, nn
 from model.networks import FourierEmbedding, MlpNet
 from model.pinn import BasicSolver, BaseEvaluator
-from model.autograd import jacobian
+from model.autograd import jacobian, gradient
 from model.lossfuncs import get as get_loss
 
 loss_func = get_loss('mse')
@@ -39,18 +39,18 @@ class NavierStokes2DSolver(BasicSolver):
         u = out_var[..., (1,)]
         v = out_var[..., (2,)]
 
-        dpda = jacobian(p, inn_var)
-        duda = jacobian(u, inn_var)
-        dvda = jacobian(v, inn_var)
+        dpda = gradient(p, inn_var)
+        duda = gradient(u, inn_var)
+        dvda = gradient(v, inn_var)
 
         dpdx, dpdy = dpda[..., (0,)], dpda[..., (1,)]
         dudx, dudy = duda[..., (0,)], duda[..., (1,)]
         dvdx, dvdy = dvda[..., (0,)], dvda[..., (1,)]
 
-        d2udx2 = jacobian(dudx, inn_var)[..., (0,)]
-        d2udy2 = jacobian(dudy, inn_var)[..., (1,)]
-        d2vdx2 = jacobian(dvdx, inn_var)[..., (0,)]
-        d2vdy2 = jacobian(dvdy, inn_var)[..., (1,)]
+        d2udx2 = gradient(dudx, inn_var)[..., (0,)]
+        d2udy2 = gradient(dudy, inn_var)[..., (1,)]
+        d2vdx2 = gradient(dvdx, inn_var)[..., (0,)]
+        d2vdy2 = gradient(dvdy, inn_var)[..., (1,)]
 
         # PDE residual
         res_x = u * dudx + v * dudy + dpdx - (d2udx2+d2udy2) / self.Re
@@ -173,7 +173,7 @@ class NavierStokes2DSolver(BasicSolver):
 
 class NavierStokes2DEvaluator(BaseEvaluator):
     def __int__(self, config, model):
-        super().__int__(self, config, model)
+        super().__init__(self, config, model)
         pass
 
 

@@ -28,6 +28,7 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
@@ -136,6 +137,8 @@ data/
 */*/work*/
 */*/data/
 */*/data*/
+*/*/wandb/
+*/*/wandb*/
 *.npz
 *.npy
 *.mat
@@ -178,6 +181,8 @@ output/
 # hydra
 logs/
 debug/
+./demo/*/wandb/
+*.wandb
 
 # draw.io
 ~$*

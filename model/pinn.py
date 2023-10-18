@@ -13,7 +13,6 @@ import ml_collections
 from model import bkd, nn
 from ml_collections import ConfigDict
 
-from model import autograd
 from model import optimizers
 from logger.logger import Logger
 

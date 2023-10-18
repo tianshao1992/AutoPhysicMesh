@@ -32,6 +32,7 @@ class Logger:
         streamhandler.setFormatter(formatter)
         streamhandler.setLevel(logging.INFO)
         self.logger.addHandler(streamhandler)
+        self.logger.setLevel(logging.INFO)
         self.logger.propagate = False
 
     def info(self, message):

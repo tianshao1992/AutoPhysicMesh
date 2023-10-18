@@ -11,6 +11,7 @@
 import time
 import os
 import wandb
+import torch
 
 from model import bkd, nn
 
@@ -42,9 +43,13 @@ for epoch in range(all_config.training.max_epoch):
     # for key, loader in valid_loaders.items():
     #     sample_data = next(iter(loader))
     #     batch[key] = {'input': sample_data[0].to(all_config.network.device), 'target': sample_data[1].to(all_config.network.device)}
+    if epoch % all_config.logging.log_every_steps == 0:
+        evaluator.step(epoch, time_sta, time_end, batch)
+        wandb.log(evaluator.log_dict, step=epoch)
 
-    evaluator.step(epoch, time_sta, time_end, batch)
-    wandb.log(evaluator.log_dict, step=epoch)
+    if epoch % all_config.saving.save_every_steps == 0:
+        torch.save({"net_model": netsolver.net_model.state_dict()}, "net_model.pth")
+
 
 
 

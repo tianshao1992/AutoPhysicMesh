@@ -97,7 +97,7 @@ def get_config():
     weighting.momentum = 0.9
     weighting.update_every_steps = 1000  # 100 for grad norm and 1000 for ntk
 
-    weighting.use_causal = True
+    weighting.use_causal = False
     weighting.causal_tol = 1.0
     weighting.num_chunks = 16
 
@@ -107,9 +107,9 @@ def get_config():
     logging.log_errors = True
     logging.log_losses = True
     logging.log_weights = True
-    logging.log_gdn = False
+    logging.log_gdn = True
     logging.log_ntk = False
-    logging.log_preds = True
+    logging.log_preds = False
 
     # Saving
     config.saving = saving = ml_collections.ConfigDict()

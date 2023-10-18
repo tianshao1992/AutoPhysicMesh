@@ -14,23 +14,12 @@ __all__ = ["gradient", "jacobian", "hessian"]
 import torch
 backend_name = "pytorch"
 
-def gradient(y, xs, grad_outputs=None, retain_graph=None, create_graph=False):
-    '''
-    Compute the gradient of `outputs` with respect to `inputs`
-
-    gradient(x.sum(), x)
-    gradient((x * y).sum(), [x, y])
-    '''
-    if bkd.is_tensor(xs):
-        inputs = [xs]
+def gradient(y, x, order=1):
+    if order == 1:
+        return torch.autograd.grad(y, x, grad_outputs=torch.ones_like(y),
+                                   create_graph=True, retain_graph=True, only_inputs=True)[0]
     else:
-        inputs = list(xs)
-    grads = torch.autograd.grad(y, xs, grad_outputs,
-                              allow_unused=True,
-                              retain_graph=retain_graph,
-                              create_graph=create_graph)
-    grads = [x if x is not None else torch.zeros_like(y) for x, y in zip(grads, inputs)]
-    return grads
+        return gradient(gradient(y, x), x, order=order - 1)
 
 
 class Jacobian(object):
