@@ -89,7 +89,7 @@ class BasicSolver(object):
     def _gdn_fn(self, loss):
         G = []
         grad_t = bkd.autograd.grad(loss, self.net_model.parameters(),
-                                   retain_graph=True, create_graph=True)
+                                   retain_graph=True, create_graph=False)
         for item in grad_t:
             G.append(item.ravel().detach())
         return G
@@ -100,7 +100,7 @@ class BasicSolver(object):
         for i in range(num):
             grad = []
             grad_t = bkd.autograd.grad(y[..., (i,)], self.net_model.parameters(),
-                                       retain_graph=True, create_graph=True)
+                                       retain_graph=True, create_graph=False)
             for item in grad_t:
                 grad.extend(item.ravel())
             J = bkd.stack(grad)
