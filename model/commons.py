@@ -13,4 +13,3 @@ def default(value, d):
         helper taken from https://github.com/lucidrains/linear-attention-transformer
     """
     return d if value is None else value
-
