@@ -10,7 +10,7 @@
 
 __all__ = ['get']
 
-from Model import bkd, nn
+from Module import bkd, nn
 
 def mean_absolute_error(y_pred, y_true):
     """

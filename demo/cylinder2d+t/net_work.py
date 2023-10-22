@@ -7,11 +7,11 @@
 # @File    : network.py
 # @Description    : ******
 """
-from model import bkd, nn
-from model.networks import FourierEmbedding, MlpNet
-from model.pinn import BasicSolver, BaseEvaluator
-from model.autograd import jacobian, gradient
-from model.lossfuncs import get as get_loss
+from Module import bkd, nn
+from NetworkZoo.mlp.MLP import FourierEmbedding, MlpNet
+from Module.pinn import BasicSolver, BaseEvaluator
+from Module.autograd import jacobian, gradient
+from Module.lossfuncs import get as get_loss
 
 loss_func = get_loss('mse')
 
