@@ -58,7 +58,7 @@ class Visual(object):
             config['font.family'] = 'sans-serif'  # 使用字体中的无衬线体
             config['font.sans-serif'] = prop.get_name()  # 根据名称设置字体
 
-            '''########################中英文混合方案二：主要为中文，而英文放入latex公式################################
+            ########################中英文混合方案二：主要为中文，而英文放入latex公式################################
             # #  https://zhuanlan.zhihu.com/p/118601703
             # # 使用内置tex,在使用英文时需要设置在公式中，且由于公式默认斜体，则正体需要使用\mathrm{text}
 
@@ -83,7 +83,7 @@ class Visual(object):
             #     ],
             # }
             # rcParams.update(pgf_config)
-            '''
+
 
             rcParams.update(config)
 
@@ -193,7 +193,24 @@ if __name__=='__main__':
     plt.show()  # fig.show();input();
 
     # airfoil reading from msh & random fields
-    import meshio
+    # import meshio
+    data_file = '../demo/cylinder2d+t/data/ns_unsteady.npy'
+    data = np.load(data_file, allow_pickle=True).item()
+    u_ref = np.array(data["u"], dtype=np.float32)
+    v_ref = np.array(data["v"], dtype=np.float32)
+    p_ref = np.array(data["p"], dtype=np.float32)
+    coords = np.array(data["coords"], dtype=np.float32)
+    cylinder_coords = np.array(data["cylinder_coords"], dtype=np.float32)
+
+    real = np.stack((p_ref[0], u_ref[0], v_ref[0]), axis=1)
+    visual_model = Visual(use_tex='ch-en')
+    fig, axs = plt.subplots(3, 3)
+    visual_model.plot_fields_tr(fig, axs, real, real, coords, mask=cylinder_coords,
+                                titles=['真实field', '预测field', '误差field'], field_names=['p', 'u', 'v'])
+    a = 1
+    plt.show()  # fig.show();input();
+
+
 
 
 
