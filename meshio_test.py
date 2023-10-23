@@ -13,7 +13,7 @@ import os
 import matplotlib.pyplot as plt
 
 from utilizes import get_filelist
-from dataset.mesh import MeshLoader
+from Dataset.mesh import MeshLoader
 
 
 msh_path = os.path.join('data', 'raw_mesh')

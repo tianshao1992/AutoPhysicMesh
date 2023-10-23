@@ -9,9 +9,9 @@
 """
 
 
-from model.dataloader import SpaceMeshDataSet, SpaceMeshDataLoader
+from Dataset.dataloader import SpaceMeshDataSet, SpaceMeshDataLoader
 import numpy as np
-import meshio
+
 
 class Mesh:
     def __init__(self, point_sets, field_sets):

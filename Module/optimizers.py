@@ -10,7 +10,7 @@
 __all__ = ['get']
 
 
-from Model import bkd, nn
+from Module import bkd, nn
 from torch.optim import Adam, SGD, RMSprop, Adagrad, Adadelta, AdamW, Adamax, ASGD, LBFGS, Rprop
 from torch.optim.lr_scheduler import StepLR, MultiStepLR, ExponentialLR, CosineAnnealingLR, ReduceLROnPlateau
 

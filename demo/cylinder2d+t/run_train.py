@@ -13,7 +13,7 @@ import os
 import wandb
 import torch
 
-from model import bkd, nn
+from Module import bkd
 
 from all_config import get_config
 from data_loader import get_dataloader
@@ -25,7 +25,7 @@ netsolver = NavierStokes2DSolver(all_config)
 evaluator = NavierStokes2DEvaluator(all_config, netsolver)
 
 wandb_config = all_config.wandb
-wandb.init(project=wandb_config.project, name=wandb_config.name)
+wandb.init(project=wandb_config.project, name=wandb_config.name, dir=wandb_config.dir)
 
 for epoch in range(all_config.training.max_epoch):
 
@@ -48,7 +48,7 @@ for epoch in range(all_config.training.max_epoch):
         wandb.log(evaluator.log_dict, step=epoch)
 
     if epoch % all_config.saving.save_every_steps == 0:
-        torch.save({"net_model": netsolver.net_model.state_dict()}, "net_model.pth")
+        netsolver.save_model("./save/net_model.pth")
 
 
 

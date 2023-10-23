@@ -7,17 +7,21 @@
 # @File    : pinn.py
 # @Description    : ******
 """
-
+import os
 from abc import ABCMeta, abstractmethod
 import ml_collections
-from Model import bkd, nn
+from Module import bkd, nn
 from ml_collections import ConfigDict
 
-from Model import optimizers
-from logger.logger import Logger
+from Module import optimizers
+from Logger.logger import Logger
+from Logger.visualizer import Visual
+
+from typing import Union, List, Dict, Tuple, Callable, Optional
+net_model_type = Union[dict, list, tuple, nn.ModuleDict, nn.ModuleList, nn.Module]
 
 class BasicSolver(object):
-    def __init__(self, net_model: dict or list or tuple or nn.ModuleDict or nn.ModuleList or nn.Module,
+    def __init__(self, net_model: net_model_type,
                        config: ConfigDict,
                        **kwargs):
         super(BasicSolver, self).__init__()
@@ -49,6 +53,11 @@ class BasicSolver(object):
         # pass
         return NotImplementedError("Subclasses should implement this!")
 
+    @abstractmethod
+    def infer(self, batch):
+        # pass
+        return NotImplementedError("Subclasses should implement this!")
+
     def solve(self, epoch, batch, *args, **kwargs):
         self.net_model.train()
         self.optimizer.zero_grad()
@@ -67,10 +76,34 @@ class BasicSolver(object):
         self.config = config
         self.net_model.to(config.network.device)
         self._set_optimizer()
-        self.loss_weights = config.weighting.init_weights
+        if 'init_weights' in config.weighting.keys():
+            self.loss_weights = config.weighting.init_weights
+        else:
+            self.loss_weights = None
+
+    def save_model(self, path):
+        bkd.save({'net_model': self.net_model,
+                  'optimizer': self.optimizer,
+                  'scheduler': self.scheduler,}, path)
+
+    def load(self, path):
+        checkpoint = bkd.load(path)
+        self.net_model = checkpoint['net_model']
+        self.optimizer = checkpoint['optimizer']
+        self.scheduler = checkpoint['scheduler']
+        self.net_model.to(self.config.network.device)
+        self._set_optimizer()
+        if 'init_weights' in self.config.weighting.keys():
+            self.loss_weights = self.config.weighting.init_weights
+        else:
+            self.loss_weights = None
 
     def _get_total_loss(self, batch, *args, **kwargs):
         total_loss = 0.
+        if self.loss_weights is None:
+            self.loss_weights = {}
+            for key, value in self.loss_dict.items():
+                self.loss_weights[key] = 1.0
         for key, value in self.loss_dict.items():
             total_loss += value * self.loss_weights[key]
         self.total_loss = total_loss.item()
@@ -160,9 +193,13 @@ class BaseEvaluator(object):
                        module: BasicSolver):
         self.config = config
         self.module = module
+        self.visual = Visual(use_tex='ch-en')
         self.log_dict = {}
         self.logger = Logger()
         self.total_loss = 1e20
+
+        if not os.path.exists(config.wandb.dir):
+            os.mkdir(config.wandb.dir)
 
     def log_losses(self, batch, *args, **kwargs):
         losses = self.module.loss_dict
@@ -174,6 +211,15 @@ class BaseEvaluator(object):
         loss_weights = self.module.loss_weights
         for key, values in loss_weights.items():
             self.log_dict[key + "_loss_weights"] = values
+
+    @abstractmethod
+    def log_plot(self, batch, *args, **kwargs):
+        pass
+
+    def log_lrs(self, batch, *args, **kwargs):
+        lrs = self.module.scheduler.get_last_lr()
+        # for key, values in lrs.items():
+        self.log_dict["global_learning_rates"] = lrs
 
     def log_grads(self, batch, *args, **kwargs):
         gdn_dict = self.module._gdn_dict
@@ -196,9 +242,13 @@ class BaseEvaluator(object):
 
         if self.config.logging.log_losses:
             self.log_losses(batch, *args, **kwargs)
+            self.log_lrs(batch, *args, **kwargs)
 
         if self.config.logging.log_weights:
             self.log_weights(batch, *args, **kwargs)
+
+        if self.config.logging.log_plot:
+            self.log_plot(batch, *args, **kwargs)
 
         if self.config.logging.log_gdn:
             self.log_grads(batch, *args, **kwargs)

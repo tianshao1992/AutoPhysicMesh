@@ -20,6 +20,7 @@ def get_config():
     config.wandb = wandb = ml_collections.ConfigDict()
     wandb.project = "PINN-NS_unsteady_cylinder_pytorch"
     wandb.name = "default"
+    wandb.dir = './work'
     wandb.tag = None
 
     # Normalization
@@ -109,7 +110,7 @@ def get_config():
     logging.log_weights = True
     logging.log_gdn = True
     logging.log_ntk = False
-    logging.log_preds = False
+    logging.log_plot = False
 
     # Saving
     config.saving = saving = ml_collections.ConfigDict()

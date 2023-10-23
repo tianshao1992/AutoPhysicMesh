@@ -10,7 +10,7 @@
 
 __all__ = ['get']
 
-from Model import bkd, nn
+from Module import bkd, nn
 
 DICT = {'gelu': nn.GELU(), 'silu': nn.SiLU(), 'relu': nn.ReLU(), 'leakyrelu': nn.LeakyReLU(),
         'elu': nn.ELU(), 'selu': nn.SELU(), 'celu': nn.CELU(), 'hardshrink': nn.Hardshrink(),

@@ -8,7 +8,7 @@
 # @Description    : ******
 """
 from Module import bkd, nn
-from NetworkZoo.mlp.MLP import FourierEmbedding, MlpNet
+from NetZoo.mlp.MLP import FourierEmbedding, MlpNet
 from Module.pinn import BasicSolver, BaseEvaluator
 from Module.autograd import jacobian, gradient
 from Module.lossfuncs import get as get_loss

@@ -12,4 +12,4 @@ import torch
 import torch.nn as nn
 bkd = torch
 
-__all__ = ['activations', 'lossfuncs', 'autograd', 'networks', 'bkd', 'nn']
+__all__ = ['activations', 'lossfuncs', 'autograd', 'bkd', 'nn']

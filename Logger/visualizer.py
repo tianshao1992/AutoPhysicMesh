@@ -31,11 +31,18 @@ class Visual(object):
     log文件记录所有打印结果
     """
 
-    def __init__(self, use_tex='ch-en', font_size=12, font_path='/home/tian/PycharmProjects/fonts/TNW+SIMSUN.TTF'):
+    def __init__(self,
+                 save_path='./work/visuals',
+                 use_tex='ch-en',
+                 font_size=12,
+                 font_file='TNW_SIMSUN.TTF'):
         self.use_tex = use_tex
         self.font_size = font_size
-        self.font_path = font_path
+        self.font_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), font_file)
         self._setup()
+        self.save_path = save_path
+        if not os.path.exists(save_path):
+            os.mkdir(save_path)
 
 
     def _setup(self):
@@ -44,7 +51,15 @@ class Visual(object):
             "font.size": self.font_size,
             "mathtext.fontset": 'stix',
             "font.serif": ['Times New Roman'],
-            'axes.unicode_minus': False,
+            "axes.unicode_minus": False,
+            "figure.constrained_layout.use": True,
+            "figure.dpi": 300,
+            # "figure.figsize": 300,
+            "axes.titlesize": 14,
+            "axes.labelsize": 12,
+            "xtick.labelsize": 12,
+            "ytick.labelsize": 12,
+            "lines.linewidth": 3.0,
         }
 
         if 'ch' in self.use_tex.lower():
@@ -52,6 +67,7 @@ class Visual(object):
             #  https://zhuanlan.zhihu.com/p/501395717
             # 使用简单，但是无法显示公式中的中文字符
             # 字体加载
+
             font_manager.fontManager.addfont(self.font_path)
             prop = font_manager.FontProperties(fname=self.font_path)
             # 字体设置
@@ -87,11 +103,38 @@ class Visual(object):
 
             rcParams.update(config)
 
-
-    def plot_fields_tr(self, fig, axs, real, pred, coord, edges=None, mask=None, cmin_max=None, fmin_max=None,
+    def plot_fields_2D(self, fig, axs, real, pred=None, coord=None,
+                       edges=None, mask=None,
+                       cmin_max=None, fmin_max=None,
                        show_channel=None, field_names=None, cmaps=None, titles=None):
+        '''
+
+        :param fig: the fig of matplotlib
+        :param axs: the axs of fig: ndarray
+        :param real: the real fields: ndarray [batch, num_of_fields]
+        :param pred: the predicted fields: ndarray [batch, num_of_fields]
+        :param coord: the predicted fields: ndarray [batch, num_of_coords]
+        :param edges: the link of edges,
+        :param mask: the hole profile in spatial
+        :param cmin_max:
+        :param fmin_max:
+        :param show_channel: the index of channel in origin data
+        :param field_names: the name of channel: a list of string, for example, ['p', 't', 'u', 'v']
+        :param cmaps:
+        :param titles: the name of width: a list of string, ['truth', 'pred', 'error'] or ['truth', ]
+        :return:
+        '''
+
+        if len(real.shape) == 3:
+            graph_flag = False
+        else:
+            graph_flag = True
+
         if len(axs.shape) == 1:
-            axs = axs[None, :]
+            if pred is None:
+                axs = axs[:, None]
+            else:
+                axs = axs[None, :]
 
         if show_channel is None:
             show_channel = np.arange(real.shape[-1])
@@ -99,15 +142,17 @@ class Visual(object):
         if field_names is None:
             field_names= []
             for i in show_channel:
-                field_names.append('filed ' + str(i+1))
+                field_names.append('field ' + str(i+1))
 
         if fmin_max is None:
-            fmin, fmax = real.min(axis=0), real.max(axis=0)
+            faxis = tuple(range(len(real.shape) - 1))
+            fmin, fmax = real.min(axis=faxis), real.max(axis=faxis)
         else:
             fmin, fmax = fmin_max[0], fmin_max[1]
 
         if cmin_max is None:
-            cmin, cmax = coord.min(axis=0), coord.max(axis=0)
+            caxis = tuple(range(len(coord.shape)-1))
+            cmin, cmax = coord.min(axis=caxis), coord.max(axis=caxis)
         else:
             cmin, cmax = cmin_max[0], cmin_max[1]
 
@@ -117,24 +162,36 @@ class Visual(object):
         if cmaps is None:
             cmaps = ['RdYlBu_r', 'RdYlBu_r', 'coolwarm']
 
-        if edges is None:
+        if graph_flag and edges is None:
             triang = tri.Triangulation(coord[:, 0], coord[:, 1])
             edges = triang.edges
 
 
-        x_pos = coord[:, 0]
-        y_pos = coord[:, 1]
-
+        x_pos = coord[..., 0]
+        y_pos = coord[..., 1]
         size_channel = len(show_channel)
-        name_channel = [field_names[i] for i in show_channel]
 
+        if pred is None:
+            show_width = 1
+        else:
+            show_width = 3
         for i in range(size_channel):
             fi = show_channel[i]
-            ff = [real[..., fi], pred[..., fi], real[..., fi] - pred[..., fi]]
+            if pred is None:
+                ff = [real[..., fi], ]
+            else:
+                ff = [real[..., fi], pred[..., fi], real[..., fi] - pred[..., fi]]
+
             limit = max(abs(ff[-1].min()), abs(ff[-1].max()))
-            for j in range(3):
-                f_true = axs[i][j].tripcolor(x_pos, y_pos, ff[j], triangles=edges, cmap=cmaps[j], shading='gouraud',
-                                             antialiased=True, snap=True)
+            for j in range(show_width):
+
+                if graph_flag:
+                    f_true = axs[i][j].tripcolor(x_pos, y_pos, ff[j],
+                                                 triangles=edges, cmap=cmaps[j], shading='gouraud',
+                                                 antialiased=True, snap=True)
+                else:
+                    f_true = axs[i][j].pcolormesh(x_pos, y_pos, ff[j], cmap=cmaps[j], shading='gouraud',
+                                                  antialiased=True, snap=True)
 
                 # f_true = axs[i][j].tricontourf(triObj, ff[j], 20, cmap=cmaps[j])
                 if mask is not None:
@@ -148,7 +205,7 @@ class Visual(object):
                 # if i == 0:
                 #     ax[i][j].set_title(titles[j], fontdict=self.font_CHN)
                 cb = fig.colorbar(f_true, ax=axs[i][j])
-                cb.ax.tick_params(labelsize=15)
+                # cb.ax.tick_params(labelsize=15)
                 # for l in cb.ax.yaxis.get_ticklabels():
                 #     l.set_family('SimHei')
                 tick_locator = ticker.MaxNLocator(nbins=6)  # colorbar上的刻度值个数
@@ -156,10 +213,10 @@ class Visual(object):
                 cb.update_ticks()
                 if j < 2:
                     f_true.set_clim(fmin[i], fmax[i])
-                    cb.ax.set_title(name_channel[i], loc='center')
+                    cb.ax.set_title(field_names[i], loc='center')
                 else:
                     f_true.set_clim(-limit, limit)
-                    cb.ax.set_title('$\mathrm{\Delta}$' + name_channel[i], loc='center')
+                    cb.ax.set_title('$\mathrm{\Delta}$' + field_names[i], loc='center')
                 # 设置刻度间隔
                 axs[i][j].set_aspect(1)
                 # axs[i][j].xaxis.set_major_locator(MultipleLocator(0.1))
@@ -168,15 +225,16 @@ class Visual(object):
                 # axs[i][j].yaxis.set_minor_locator(MultipleLocator(0.1))
                 axs[i][j].set_xlabel('x')
                 axs[i][j].set_ylabel('y')
-                box_line_width = 1.0
-                axs[i][j].spines['bottom'].set_linewidth(box_line_width)  # 设置底部坐标轴的粗细
-                axs[i][j].spines['left'].set_linewidth(box_line_width)  # 设置左边坐标轴的粗细
-                axs[i][j].spines['right'].set_linewidth(box_line_width)  # 设置右边坐标轴的粗细
-                axs[i][j].spines['top'].set_linewidth(box_line_width)  # 设置右边坐标轴的粗细
-
+                box_line_width = 3.0
+                # 设置底部坐标轴的粗细
+                axs[i][j].spines['bottom'].set_linewidth(box_line_width)
+                axs[i][j].spines['left'].set_linewidth(box_line_width)
+                axs[i][j].spines['right'].set_linewidth(box_line_width)
+                axs[i][j].spines['top'].set_linewidth(box_line_width)
 
 
 if __name__=='__main__':
+    visual_model = Visual(use_tex='ch-en')
 
     # random data
     x = np.random.rand(10, 1)
@@ -185,8 +243,6 @@ if __name__=='__main__':
     real = np.random.rand(10, 1)
     pred = np.random.rand(10, 1)
     mask = np.array([[0, 0], [0, 0.5], [0.5, 0.5], [0.5, 0]])
-
-    visual_model = Visual(use_tex='ch-en')
     fig, axs = plt.subplots(1, 3)
     visual_model.plot_fields_tr(fig, axs, real, pred, coord, mask=mask, titles=['真实field', '预测field', '误差field'])
     a = 1
@@ -203,18 +259,11 @@ if __name__=='__main__':
     cylinder_coords = np.array(data["cylinder_coords"], dtype=np.float32)
 
     real = np.stack((p_ref[0], u_ref[0], v_ref[0]), axis=1)
-    visual_model = Visual(use_tex='ch-en')
-    fig, axs = plt.subplots(3, 3)
-    visual_model.plot_fields_tr(fig, axs, real, real, coords, mask=cylinder_coords,
+    fig, axs = plt.subplots(3, 1)
+    visual_model.plot_fields_tr(fig, axs, real, None, coords, mask=cylinder_coords,
                                 titles=['真实field', '预测field', '误差field'], field_names=['p', 'u', 'v'])
     a = 1
     plt.show()  # fig.show();input();
-
-
-
-
-
-
 
 
 

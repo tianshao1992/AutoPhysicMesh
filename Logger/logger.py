@@ -7,6 +7,7 @@
 # @File    : logger.py
 # @Description    : ******
 """
+import os
 import logging
 from tabulate import tabulate
 
@@ -18,6 +19,8 @@ def get_log_keys(log_dict):
             key_list.append(key)
         elif key.endswith("_metric_values"):
             key_list.append(key)
+        elif key.endswith("_learning_rates"):
+            key_list.append(key)
     return key_list
 
 
@@ -28,6 +31,7 @@ class Logger:
         formatter = logging.Formatter(
             "[%(asctime)s - %(name)s - %(levelname)s] %(message)s", datefmt="%H:%M:%S"
         )
+
         streamhandler = logging.StreamHandler()
         streamhandler.setFormatter(formatter)
         streamhandler.setLevel(logging.INFO)
