@@ -18,7 +18,7 @@ def get_config():
     # Weights & Biases
     config.wandb = wandb = ml_collections.ConfigDict()
     wandb.project = "PINN-NS_steady_cylinder_pytorch"
-    wandb.name = "default"
+    wandb.name = "no update weights"
     wandb.dir = './work'
     wandb.tag = None
 
@@ -45,7 +45,7 @@ def get_config():
     network.device = "cuda:0"
     network.input_dim = 2
     network.layer_depth = 4
-    network.layer_width = 128
+    network.layer_width = 256
     network.output_dim = 3
     network.layer_active = "gelu"  # gelu works better than tanh for this problem
     network.modified_mode = True
@@ -79,11 +79,11 @@ def get_config():
     training.outflow_batch_size = 2048
     training.wall_batch_size = 2048
     training.cylinder_batch_size = 2048
-    training.res_batch_size = 4096
+    training.res_batch_size = 8192
 
     # Weighting
     config.weighting = weighting = ml_collections.ConfigDict()
-    weighting.scheme = "gdn"
+    weighting.scheme = '' # "gdn"
     weighting.init_weights = {
         "u_in": 1.0,
         "v_in": 1.0,
@@ -107,7 +107,7 @@ def get_config():
     logging.log_errors = True
     logging.log_losses = True
     logging.log_weights = True
-    logging.log_gdn = True
+    logging.log_gdn = False
     logging.log_ntk = False
     logging.log_plot = True
 

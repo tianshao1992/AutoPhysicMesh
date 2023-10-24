@@ -26,36 +26,51 @@ def inflow_fn(y, fields_num):
     puv[..., (1,)] = u
     return puv
 
+def Nondimension(L_star, U_star, x, type='x'):
+    if type == 'x':
+        x = x / L_star
+    elif type == 'y':
+        x[:, 0] = x[:, 0] / U_star ** 2
+        x[:, 1:] = x[:, 1:] / U_star
+    return x
+
 
 def get_dataloader(all_config):
 
-    data = np.load("data/ns_steady.npy", allow_pickle=True).item()
-    u_ref = np.array(data["u"], dtype=np.float32) / all_config.physics.U_star
-    v_ref = np.array(data["v"], dtype=np.float32) / all_config.physics.U_star
-    p_ref = np.array(data["p"], dtype=np.float32) / all_config.physics.U_star**2
-    coords = np.array(data["coords"], dtype=np.float32) / all_config.physics.L_star
-    inflow_coords = np.array(data["inflow_coords"], dtype=np.float32) / all_config.physics.L_star
-    outflow_coords = np.array(data["outflow_coords"], dtype=np.float32) / all_config.physics.L_star
-    wall_coords = np.array(data["wall_coords"], dtype=np.float32) / all_config.physics.L_star
-    cylinder_coords = np.array(data["cylinder_coords"], dtype=np.float32) / all_config.physics.L_star
-    nu = np.array(data["nu"], dtype=np.float32)
-    all_config.physics.L = coords[..., 0].max().item()
-    all_config.physics.W = coords[..., 1].max().item()
-
+    non_dim = lambda x, type='x': Nondimension(all_config.physics.L_star, all_config.physics.U_star, x, type)
     fields_num = 3
-    point_sets = {'all': coords,
-                  'res': coords,
-                  'inflow': inflow_coords,
-                  'outflow': outflow_coords,
-                  'wall': wall_coords,
-                  'cylinder': cylinder_coords}
+    data = np.load("data/ns_steady.npy", allow_pickle=True).item()
+    u_ref = np.array(data["u"], dtype=np.float32)
+    v_ref = np.array(data["v"], dtype=np.float32)
+    p_ref = np.array(data["p"], dtype=np.float32)
+    coords = np.array(data["coords"], dtype=np.float32)
 
-    field_sets = {'all': np.stack((p_ref, u_ref, v_ref), axis=-1),
-                  'res': np.zeros((coords.shape[0], fields_num), dtype=np.float32),
-                  'inflow': inflow_fn(inflow_coords[..., (1,)] * all_config.physics.L_star, fields_num),
-                  'outflow': np.zeros((outflow_coords.shape[0], fields_num), dtype=np.float32),
-                  'wall': np.zeros((wall_coords.shape[0], fields_num), dtype=np.float32),
-                  'cylinder': np.zeros((cylinder_coords.shape[0], fields_num), dtype=np.float32)}
+    inflow_coords = np.array(data["inflow_coords"], dtype=np.float32)
+    outflow_coords = np.array(data["outflow_coords"], dtype=np.float32)
+    wall_coords = np.array(data["wall_coords"], dtype=np.float32)
+    cylinder_coords = np.array(data["cylinder_coords"], dtype=np.float32)
+
+    nu = np.array(data["nu"], dtype=np.float32)
+
+    point_sets = {'all': non_dim(coords),
+                  'res': non_dim(coords),
+                  'inflow': non_dim(inflow_coords),
+                  'outflow': non_dim(outflow_coords),
+                  'wall': non_dim(wall_coords),
+                  'cylinder': non_dim(cylinder_coords)
+                  }
+
+
+    all_config.physics.L = point_sets['res'][..., 0].max().item() - point_sets['res'][..., 0].min().item()
+    all_config.physics.W = point_sets['res'][..., 1].max().item() - point_sets['res'][..., 1].min().item()
+
+    field_sets = {'all': non_dim(np.stack((p_ref, u_ref, v_ref), axis=-1), type='y'),
+                  'res': non_dim(np.stack((p_ref, u_ref, v_ref), axis=-1), type='y'),
+                  'inflow': non_dim(inflow_fn(inflow_coords[..., (1,)], fields_num), type='y'),
+                  'outflow': non_dim(np.zeros((outflow_coords.shape[0], fields_num), dtype=np.float32), type='y'),
+                  'wall': non_dim(np.zeros((wall_coords.shape[0], fields_num), dtype=np.float32), type='y'),
+                  'cylinder': non_dim(np.zeros((cylinder_coords.shape[0], fields_num), dtype=np.float32), type='y')
+                  }
 
     all_data = Mesh(point_sets, field_sets)
     dataset = SpaceMeshDataSet(all_data)
@@ -77,7 +92,7 @@ def get_dataloader(all_config):
 
     valid_datasets = {'all': dataset(set_name='all', train_mode=False,)}
 
-    valid_loaders = DataLoadersManager(valid_datasets, random_seed=2023, batch_sizes=10000)
+    valid_loaders = DataLoadersManager(valid_datasets, random_seed=2023, batch_sizes=len(field_sets['all']))
 
     return train_loaders, valid_loaders
 

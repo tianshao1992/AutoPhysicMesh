@@ -62,7 +62,7 @@ class NavierStokes2DSolver(BasicSolver):
         res_c = dudx + dvdy
 
         # outflow boundary residual
-        u_out = dudx / self.Re - p
+        u_out = dudx - p
         v_out = dvdx
 
         return bkd.cat((res_x, res_y, res_c), dim=-1), bkd.cat((u_out, v_out), dim=-1)
@@ -138,7 +138,7 @@ class NavierStokes2DSolver(BasicSolver):
         super().config_setup(config)
 
         # Non-dimensionalized domain length and width
-        self.L, self.W, self.T = config.physics.L, config.physics.W, config.physics.T
+        self.L, self.W = config.physics.L, config.physics.W
         self.Re = config.physics.Re  # Reynolds number
 
         self.U_star = config.physics.U_star
@@ -185,7 +185,7 @@ class NavierStokes2DEvaluator(BaseEvaluator):
         real = batch_['all']['target']
         pred = batch_['all']['pred']
         coords = batch_['all']['input']
-        fig, axs = plt.subplots(3, 3, num=100, figsize=(20, 8))
+        fig, axs = plt.subplots(3, 3, num=100, figsize=(16, 4))
         self.visual.plot_fields_2D(fig, axs, real, pred, coords,
                                    titles=['真实', '预测', '误差'], field_names=['p', 'u', 'v'],
                                    cmaps=['jet', 'jet', 'coolwarm'])
