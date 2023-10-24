@@ -82,9 +82,12 @@ class BasicSolver(object):
             self.loss_weights = None
 
     def save_model(self, path):
+        save_path = os.path.split(os.path.abspath(path))[0]
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
         bkd.save({'net_model': self.net_model,
                   'optimizer': self.optimizer,
-                  'scheduler': self.scheduler,}, path)
+                  'scheduler': self.scheduler, }, path)
 
     def load(self, path):
         checkpoint = bkd.load(path)
@@ -217,7 +220,7 @@ class BaseEvaluator(object):
         pass
 
     def log_lrs(self, batch, *args, **kwargs):
-        lrs = self.module.scheduler.get_last_lr()
+        lrs = self.module.scheduler.get_last_lr()[0]
         # for key, values in lrs.items():
         self.log_dict["global_learning_rates"] = lrs
 

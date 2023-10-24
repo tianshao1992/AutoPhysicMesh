@@ -46,10 +46,11 @@ for epoch in range(all_config.training.max_epoch):
     if epoch % all_config.logging.log_every_steps == 0:
         evaluator.step(epoch, time_sta, time_end, batch)
         wandb.log(evaluator.log_dict, step=epoch)
+        wandb.log(evaluator.fig_dict, step=epoch)
 
     if epoch % all_config.saving.save_every_steps == 0:
         netsolver.save_model("./save/net_model.pth")
-        # wandb.save("./save/net_model.pth")  # require to rerun pycharm as administrator
+        wandb.save("./save/net_model.pth")
 
 
 

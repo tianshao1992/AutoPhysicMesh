@@ -42,7 +42,7 @@ class Visual(object):
         self._setup()
         self.save_path = save_path
         if not os.path.exists(save_path):
-            os.mkdir(save_path)
+            os.makedirs(save_path)
 
 
     def _setup(self):
@@ -51,12 +51,13 @@ class Visual(object):
             "font.size": self.font_size,
             "mathtext.fontset": 'stix',
             "font.serif": ['Times New Roman'],
-            "axes.unicode_minus": False,
-            "figure.constrained_layout.use": True,
+            "figure.constrained_layout.use": True,  # solve the problem that text is covered by the other text
             "figure.dpi": 300,
             # "figure.figsize": 300,
-            "axes.titlesize": 14,
+            "axes.titlesize": 12,
             "axes.labelsize": 12,
+            # "axes.linewidth ": 1.0,
+            "axes.unicode_minus": False,
             "xtick.labelsize": 12,
             "ytick.labelsize": 12,
             "lines.linewidth": 3.0,
@@ -201,15 +202,10 @@ class Visual(object):
                 # axs[i][j].grid(zorder=0, which='both', color='grey', linewidth=1)
                 axs[i][j].set_title(titles[j])
                 axs[i][j].axis([cmin[0], cmax[0], cmin[1], cmax[1]])
-                # axs[i][j].tick_params(axis='x', labelsize=)
-                # if i == 0:
-                #     ax[i][j].set_title(titles[j], fontdict=self.font_CHN)
                 cb = fig.colorbar(f_true, ax=axs[i][j])
                 # cb.ax.tick_params(labelsize=15)
-                # for l in cb.ax.yaxis.get_ticklabels():
-                #     l.set_family('SimHei')
-                tick_locator = ticker.MaxNLocator(nbins=6)  # colorbar上的刻度值个数
-                cb.locator = tick_locator
+                # tick_locator = ticker.MaxNLocator(nbins=6)  # colorbar上的刻度值个数
+                # cb.locator = tick_locator
                 cb.update_ticks()
                 if j < 2:
                     f_true.set_clim(fmin[i], fmax[i])
@@ -219,18 +215,9 @@ class Visual(object):
                     cb.ax.set_title('$\mathrm{\Delta}$' + field_names[i], loc='center')
                 # 设置刻度间隔
                 axs[i][j].set_aspect(1)
-                # axs[i][j].xaxis.set_major_locator(MultipleLocator(0.1))
-                # axs[i][j].yaxis.set_major_locator(MultipleLocator(0.1))
-                # axs[i][j].xaxis.set_minor_locator(MultipleLocator(0.2))
-                # axs[i][j].yaxis.set_minor_locator(MultipleLocator(0.1))
                 axs[i][j].set_xlabel('x')
                 axs[i][j].set_ylabel('y')
-                box_line_width = 3.0
-                # 设置底部坐标轴的粗细
-                axs[i][j].spines['bottom'].set_linewidth(box_line_width)
-                axs[i][j].spines['left'].set_linewidth(box_line_width)
-                axs[i][j].spines['right'].set_linewidth(box_line_width)
-                axs[i][j].spines['top'].set_linewidth(box_line_width)
+
 
 
 if __name__=='__main__':
