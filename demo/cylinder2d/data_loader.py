@@ -30,8 +30,8 @@ def Nondimension(L_star, U_star, x, type='x'):
     if type == 'x':
         x = x / L_star
     elif type == 'y':
-        x[:, 0] = x[:, 0] / U_star ** 2
-        x[:, 1:] = x[:, 1:] / U_star
+        x[..., 0] = x[..., 0] / U_star ** 2
+        x[..., 1:] = x[..., 1:] / U_star
     return x
 
 
@@ -52,25 +52,27 @@ def get_dataloader(all_config):
 
     nu = np.array(data["nu"], dtype=np.float32)
 
-    point_sets = {'all': non_dim(coords),
-                  'res': non_dim(coords),
-                  'inflow': non_dim(inflow_coords),
-                  'outflow': non_dim(outflow_coords),
-                  'wall': non_dim(wall_coords),
-                  'cylinder': non_dim(cylinder_coords)
+    point_sets = {'all': coords,
+                  'res': coords,
+                  'inflow': inflow_coords,
+                  'outflow': outflow_coords,
+                  'wall': wall_coords,
+                  'cylinder': cylinder_coords
                   }
+    point_sets.update({key: non_dim(value) for key, value in point_sets.items()})
 
 
     all_config.physics.L = point_sets['res'][..., 0].max().item() - point_sets['res'][..., 0].min().item()
     all_config.physics.W = point_sets['res'][..., 1].max().item() - point_sets['res'][..., 1].min().item()
 
-    field_sets = {'all': non_dim(np.stack((p_ref, u_ref, v_ref), axis=-1), type='y'),
-                  'res': non_dim(np.stack((p_ref, u_ref, v_ref), axis=-1), type='y'),
-                  'inflow': non_dim(inflow_fn(inflow_coords[..., (1,)], fields_num), type='y'),
-                  'outflow': non_dim(np.zeros((outflow_coords.shape[0], fields_num), dtype=np.float32), type='y'),
-                  'wall': non_dim(np.zeros((wall_coords.shape[0], fields_num), dtype=np.float32), type='y'),
-                  'cylinder': non_dim(np.zeros((cylinder_coords.shape[0], fields_num), dtype=np.float32), type='y')
+    field_sets = {'all': np.stack((p_ref, u_ref, v_ref), axis=-1),
+                  'res': np.stack((p_ref, u_ref, v_ref), axis=-1),
+                  'inflow': inflow_fn(inflow_coords[..., (1,)], fields_num),
+                  'outflow': np.zeros((outflow_coords.shape[0], fields_num), dtype=np.float32),
+                  'wall': np.zeros((wall_coords.shape[0], fields_num), dtype=np.float32),
+                  'cylinder': np.zeros((cylinder_coords.shape[0], fields_num), dtype=np.float32),
                   }
+    field_sets.update({key: non_dim(value, type='y') for key, value in field_sets.items()})
 
     all_data = Mesh(point_sets, field_sets)
     dataset = SpaceMeshDataSet(all_data)

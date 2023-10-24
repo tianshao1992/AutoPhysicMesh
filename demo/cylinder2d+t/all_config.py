@@ -19,7 +19,7 @@ def get_config():
     # Weights & Biases
     config.wandb = wandb = ml_collections.ConfigDict()
     wandb.project = "PINN-NS_steady_cylinder_pytorch"
-    wandb.name = "default"
+    wandb.name = "casual-grad norm"
     wandb.dir = './work'
     wandb.tag = None
 
@@ -38,22 +38,22 @@ def get_config():
     # scale to [0, 1], update in dataloader
     physics.L = 1.0
     physics.W = 1.0
-    # physics.T = 1.0
+    physics.T = 1.0
 
     # Arch
     config.network = network = ml_collections.ConfigDict()
     network.arch_name = "ModifiedMlp"
     network.device = "cuda:0"
-    network.input_dim = 2
+    network.input_dim = 3
     network.layer_depth = 4
     network.layer_width = 128
     network.output_dim = 3
     network.layer_active = "gelu"  # gelu works better than tanh for this problem
     network.modified_mode = True
     network.periodicity = None
-    network.fourier_emb = ml_collections.ConfigDict({'input_dim': 2,
+    network.fourier_emb = ml_collections.ConfigDict({'input_dim': 3,
                                                      'output_dim': network.layer_width,
-                                                     'hidden_dim': 8,
+                                                     'hidden_dim': 128,
                                                      "scale": 1.0,
                                                      "modes": 2})
 
@@ -74,7 +74,7 @@ def get_config():
 
     # Training
     config.training = training = ml_collections.ConfigDict()
-    training.max_epoch = 100000
+    training.max_epoch = 200000
     training.num_time_windows = 10
 
     training.inflow_batch_size = 2048
@@ -88,14 +88,17 @@ def get_config():
     config.weighting = weighting = ml_collections.ConfigDict()
     weighting.scheme = "gdn"
     weighting.init_weights = {
-        "u_in": 1.0,
-        "v_in": 1.0,
+        "p_ic": 100.0,
+        "u_ic": 100.0,
+        "v_ic": 100.0,
+        "u_in": 100.0,
+        "v_in": 100.0,
         "u_out": 1.0,
         "v_out": 1.0,
-        "u_wall": 1.0,
-        "v_wall": 1.0,
-        "u_cylinder": 1.0,
-        "v_cylinder": 1.0,
+        "u_wall": 10.0,
+        "v_wall": 10.0,
+        "u_cylinder": 10.0,
+        "v_cylinder": 10.0,
         "r_x": 1.0,
         "r_y": 1.0,
         "r_c": 1.0,
@@ -104,9 +107,9 @@ def get_config():
     weighting.momentum = 0.9
     weighting.update_every_steps = 1000  # 100 for grad norm and 1000 for ntk
     #
-    # weighting.use_causal = True
-    # weighting.causal_tol = 1.0
-    # weighting.num_chunks = 16
+    weighting.use_causal = True
+    weighting.causal_tol = 1.0
+    weighting.num_chunks = 16
 
     # Logging
     config.logging = logging = ml_collections.ConfigDict()
@@ -116,7 +119,7 @@ def get_config():
     logging.log_weights = False
     logging.log_gdn = True
     logging.log_ntk = False
-    logging.log_plot = False
+    logging.log_plot = True
 
     # Saving
     config.saving = saving = ml_collections.ConfigDict()
