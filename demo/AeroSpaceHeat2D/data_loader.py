@@ -14,7 +14,9 @@ import numpy as np
 import meshio
 
 from Dataset.dataprocess import DataNormer
-from Dataset.dataloader import ImageFieldDataSet, ImageFieldDataLoader
+from Dataset.ImageField import ImageFieldDataSet
+from Dataset.dataloader import DataLoadersManager
+
 
 def get_dataloader():
 
@@ -62,11 +64,9 @@ def get_dataloader():
 
 
 
-    train_loaders = {'temper': ImageFieldDataLoader(dataset(input_name='inputs', output_name='temper'),
-                                                    batch_size=4,
-                                                    shuffle=True,)
+    train_loaders = DataLoadersManager(datasets={'temper': dataset(input_name='inputs', output_name='temper')},
+                                       batch_sizes={'temper': 4}, random_seed=2023, shuffle=True)
 
-    }
 
     dataset = ImageFieldDataSet(raw_data={'f_t': f_t[n_train:], 'g_t': g_t[n_train:],
                                           'load_t': np.stack((f_t, g_t), axis=-1)[n_train:],
@@ -77,11 +77,8 @@ def get_dataloader():
                                 output_name='temper',
     )
 
-    valid_loaders = {'temper': ImageFieldDataLoader(dataset(input_name='inputs', output_name='temper'),
-                                                    batch_size=1,
-                                                    shuffle=False,)
-
-    }
+    valid_loaders = DataLoadersManager(datasets={'temper': dataset(input_name='inputs', output_name='temper')},
+                                       batch_sizes={'temper': 4}, random_seed=2023, shuffle=True)
 
     return train_loaders, valid_loaders
 

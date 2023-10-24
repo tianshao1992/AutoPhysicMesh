@@ -79,7 +79,8 @@ def get_config():
 
     training.inflow_batch_size = 2048
     training.outflow_batch_size = 2048
-    training.noslip_batch_size = 2048
+    training.wall_batch_size = 2048
+    training.cylinder_batch_size = 2048
     training.ic_batch_size = 2048
     training.res_batch_size = 4096
 
@@ -115,15 +116,11 @@ def get_config():
     logging.log_weights = False
     logging.log_gdn = True
     logging.log_ntk = False
-    logging.log_plot = True
+    logging.log_plot = False
 
     # Saving
     config.saving = saving = ml_collections.ConfigDict()
     saving.save_every_steps = 10000
-    saving.num_keep_ckpts = 10
-
-    # Input shape for initializing Flax models
-    config.input_dim = 3
 
     # Integer for PRNG random seed.
     config.seed = 42

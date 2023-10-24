@@ -16,6 +16,13 @@ def default(value, d):
     """
     return d if value is None else value
 
+def identity(x):
+    """
+    to be used as default activation or function in general
+    :param x: tensor or numpy array
+    :return: x
+    """
+    return x
 
 def fig2data(fig):
     """

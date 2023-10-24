@@ -67,17 +67,17 @@ class SpaceMeshDataSet(Dataset):
             if self.time_interval is not None:
                 time_stamp = self._get_time_random()
                 if isinstance(self.mesh_points, np.ndarray):
-                    return (np.concatenate((self.mesh_points[idx], time_stamp), axis=-1),
-                            self.mesh_fields[idx],)
+                    return {'input': np.concatenate((self.mesh_points[idx], time_stamp), axis=-1),
+                            'target': self.mesh_fields[idx]}
                 elif isinstance(self.mesh_points, bkd.Tensor):
-                    return (bkd.cat((self.mesh_points[idx], bkd.tensor(time_stamp)), dim=-1),
-                            self.mesh_fields[idx])
+                    return {'input': bkd.cat((self.mesh_points[idx], bkd.tensor(time_stamp)), dim=-1),
+                            'target': self.mesh_fields[idx]}
                 else:
                     raise NotImplementedError("mesh_points should be np.ndarray or bkd.Tensor")
             else:
-                return self.mesh_points[idx], self.mesh_fields[idx]
+                return {'input': self.mesh_points[idx], 'target': self.mesh_fields[idx]}
         else:
-            return self.mesh_points[idx], self.mesh_fields[idx]
+            return {'input': self.mesh_points[idx], 'target': self.mesh_fields[idx]}
 
     def _loadfile(self, file):
         assert os.path.exists(file), 'file not found: ' + file

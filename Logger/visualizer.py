@@ -231,7 +231,7 @@ if __name__=='__main__':
     pred = np.random.rand(10, 1)
     mask = np.array([[0, 0], [0, 0.5], [0.5, 0.5], [0.5, 0]])
     fig, axs = plt.subplots(1, 3)
-    visual_model.plot_fields_tr(fig, axs, real, pred, coord, mask=mask, titles=['真实field', '预测field', '误差field'])
+    visual_model.plot_fields_2D(fig, axs, real, pred, coord, mask=mask, titles=['真实field', '预测field', '误差field'])
     a = 1
     plt.show()  # fig.show();input();
 

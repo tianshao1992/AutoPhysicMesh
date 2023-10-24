@@ -21,8 +21,8 @@ from net_work import Heat2DPredictor, Heat2DEvaluator
 all_config = get_config()
 train_loaders, valid_loaders = get_dataloader()
 
-input_normalizer = DataNormer(train_loaders['temper'].dataset.input_data, method="min-max")
-output_normalizer = DataNormer(train_loaders['temper'].dataset.output_data, method="min-max")
+input_normalizer = DataNormer(train_loaders.datasets['temper'].input_data, method="min-max")
+output_normalizer = DataNormer(train_loaders.datasets['temper'].output_data, method="min-max")
 
 netsolver = Heat2DPredictor(all_config)
 evaluator = Heat2DEvaluator(all_config, netsolver)
@@ -33,15 +33,20 @@ wandb.init(project=wandb_config.project, name=wandb_config.name, dir=wandb_confi
 time_sta = time.time()
 for epoch in range(all_config.training.max_epoch):
 
-    train_batch = {}
-    for key, loader in train_loaders.items():
-         sample_data = next(iter(loader))
-         input_data = input_normalizer.norm(sample_data[0]).reshape(-1, 9, 10, 4)
-         output_data = output_normalizer.norm(sample_data[1]).reshape(-1, 9, 10, 1)
+    # for key, loader in train_loaders.items():
+    #      sample_data = next(iter(loader))
+    #      input_data = input_normalizer.norm(sample_data[0]).reshape(-1, 9, 10, 4)
+    #      output_data = output_normalizer.norm(sample_data[1]).reshape(-1, 9, 10, 1)
+    #
+    #      train_batch[key] = {'input': input_data.to(all_config.network.device),
+    #                          'target': output_data.to(all_config.network.device)}
+    #
+    train_batch = next(iter(train_loaders))
+    input_data = input_normalizer.norm(sample_data[0]).reshape(-1, 9, 10, 4)
+    output_data = output_normalizer.norm(sample_data[1]).reshape(-1, 9, 10, 1)
 
-         train_batch[key] = {'input': input_data.to(all_config.network.device),
-                             'target': output_data.to(all_config.network.device)}
-
+    train_batch['temp'] = {'input': input_data.to(all_config.network.device),
+                           'target': output_data.to(all_config.network.device)}
     netsolver.solve(epoch, train_batch)
 
 

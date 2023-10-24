@@ -9,15 +9,9 @@
 """
 
 
-
 import os
-import meshio
-import gmsh
-import numpy as np
-from Module import bkd
 from torch.utils.data import Dataset
 from Utilizes.commons import default
-
 
 from Dataset.dataprocess import DataNormer
 
@@ -73,7 +67,8 @@ class ImageFieldDataSet(Dataset):
             self.output_data = None
 
     def __getitem__(self, idx):
-        return self.input_data[idx], self.output_data[idx]
+        return {'input': self.input_data[idx],
+                'target': self.output_data[idx] if self.output_data is not None else None}
 
 
     def load_file(self, file):

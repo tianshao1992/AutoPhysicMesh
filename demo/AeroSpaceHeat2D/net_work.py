@@ -85,7 +85,7 @@ class Heat2DEvaluator(BaseEvaluator):
 
         for time_step in range(0, 60, 10):
             fig, axs = plt.subplots(3, 1, num=100+time_step, figsize=(10, 8))
-            self.visual.plot_fields_tr(fig, axs, temper_true[time_step], temper_pred[time_step], coords[time_step],
+            self.visual.plot_fields_2D(fig, axs, temper_true[time_step], temper_pred[time_step], coords[time_step],
                                        titles=['真实field', '预测field', '误差'], field_names=['T/℃'],
                                        cmaps=['jet', 'jet', 'coolwarm'])
             if isinstance(save_fig, str):

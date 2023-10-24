@@ -8,6 +8,8 @@
 # @Description    : ******
 """
 import os
+
+import numpy as np
 import wandb
 import matplotlib.pyplot as plt
 
@@ -21,7 +23,7 @@ loss_func = get_loss('mse')
 
 class NavierStokes2DSolver(BasicSolver):
     def __init__(self, config):
-        # super(NavierStokes2D, self).__init__()
+        # super(NavierStokes2DSolver, self).__init__(config)
 
         self.config_setup(config)
         self.loss_dict = {}
@@ -76,7 +78,7 @@ class NavierStokes2DSolver(BasicSolver):
         res_batch = batch["res"]
 
         # residual loss
-        res_input = res_batch['input']
+        res_input = res_batch['input'].to(self.config.network.device)
         res_input.requires_grad_(True)
         res_pred = self.forward(inn_var=res_input)
         res_pred, _ = self.residual(inn_var=res_input, out_var=res_pred)
@@ -85,13 +87,14 @@ class NavierStokes2DSolver(BasicSolver):
         res_loss_c = loss_func(res_pred[..., (2,)], 0)
 
         # inflow loss
-        inflow_input, inflow_true = inflow_batch['input'], inflow_batch['target']
+        inflow_input, inflow_true = (inflow_batch['input'].to(self.config.network.device),
+                                     inflow_batch['target'].to(self.config.network.device))
         inflow_pred = self.forward(inn_var=inflow_input)
         inflow_loss_u = loss_func(inflow_pred[..., (1,)], inflow_true[..., (1,)])
         inflow_loss_v = loss_func(inflow_pred[..., (2,)], 0)
 
         # outflow loss
-        outflow_input = outflow_batch['input']
+        outflow_input = outflow_batch['input'].to(self.config.network.device)
         outflow_input.requires_grad_(True)
         outflow_pred = self.forward(inn_var=outflow_input)
         _, outflow_res = self.residual(outflow_input, outflow_pred)
@@ -99,13 +102,13 @@ class NavierStokes2DSolver(BasicSolver):
         outflow_loss_v = loss_func(outflow_res[..., (1,)], 0)
 
         # wall loss
-        wall_input = wall_batch['input']
+        wall_input = wall_batch['input'].to(self.config.network.device)
         wall_pred = self.forward(inn_var=wall_input)
         wall_loss_u = loss_func(wall_pred[..., (1,)], 0)
         wall_loss_v = loss_func(wall_pred[..., (2,)], 0)
 
         # wall loss
-        cylinder_input = cylinder_batch['input']
+        cylinder_input = cylinder_batch['input'].to(self.config.network.device)
         cylinder_pred = self.forward(inn_var=cylinder_input)
         cylinder_loss_u = loss_func(cylinder_pred[..., (1,)], 0)
         cylinder_loss_v = loss_func(cylinder_pred[..., (2,)], 0)
@@ -150,7 +153,7 @@ class NavierStokes2DSolver(BasicSolver):
 
     def output_transform(self, inn_var, out_var):
         y_hat = inn_var[..., (1,)] * self.L_star * self.W
-        out_var[..., (1,)] = out_var[..., (1,)] + 4 * 1.5 * y_hat * (0.41 - y_hat) / (0.41**2)
+        out_var[..., (1,)] += 4 * 1.5 * y_hat * (0.41 - y_hat) / (0.41**2)
         return out_var
 
 class NavierStokes2DEvaluator(BaseEvaluator):
@@ -161,61 +164,38 @@ class NavierStokes2DEvaluator(BaseEvaluator):
 
     def eval_res(self, batch):
         self.module.net_model.eval()
-        inflow_batch = batch["inflow"]
-        outflow_batch = batch["outflow"]
-        wall_batch = batch["wall"]
-        cylinder_batch = batch["cylinder"]
-        res_batch = batch["res"]
+        valid_batch = batch["all"]
 
         # residual loss
-        res_input = res_batch['input']
+        res_input = valid_batch['input'].to(self.config.network.device)
         res_input.requires_grad_(True)
         res_pred = self.module.forward(inn_var=res_input)
-        res_res, _ = self.module.residual(inn_var=res_input, out_var=res_pred)
+        res_residual, _ = self.module.residual(inn_var=res_input, out_var=res_pred)
 
-        # inflow loss
-        inflow_input, inflow_true = inflow_batch['input'], inflow_batch['target']
-        inflow_pred = self.module.forward(inn_var=inflow_input)
-        # outflow loss
-        outflow_input = outflow_batch['input']
-        outflow_input.requires_grad_(True)
-        outflow_pred = self.module.forward(inn_var=outflow_input)
-        _, outflow_res = self.module.residual(outflow_input, outflow_pred)
-        # wall loss
-        wall_input = wall_batch['input']
-        wall_pred = self.module.forward(inn_var=wall_input)
-        # wall loss
-        cylinder_input = cylinder_batch['input']
-        cylinder_pred = self.module.forward(inn_var=cylinder_input)
-
-        pred_res ={
-            "res": {'input': res_input.detach().cpu().numpy(), 'pred': res_pred.detach().cpu().numpy(),
-                    'target': res_batch['target'].detach().cpu().numpy(), 'residual': res_res.detach().cpu().numpy()},
-            "inflow": {'input': inflow_input.detach().cpu().numpy(), 'pred': inflow_pred.detach().cpu().numpy(),
-                    'target': inflow_true.detach().cpu().numpy(),},
-            "outflow": {'input': outflow_input.detach().cpu().numpy(), 'pred': outflow_pred.detach().cpu().numpy(),
-                    'target': outflow_batch['target'].detach().cpu().numpy(), 'residual': outflow_res.detach().cpu().numpy()},
-            "wall": {'input': wall_input.detach().cpu().numpy(), 'pred': wall_pred.detach().cpu().numpy(),
-                    'target': wall_batch['target'].detach().cpu().numpy(),},
-            "cylinder": {'input': cylinder_input.detach().cpu().numpy(), 'pred': cylinder_pred.detach().cpu().numpy(),
-                    'target': cylinder_batch['target'].detach().cpu().numpy(),},
+        pred_res = {
+            "all": {'input': res_input.detach().cpu().numpy(),
+                    'pred': res_pred.detach().cpu().numpy(),
+                    'target': valid_batch['target'].numpy(),
+                    'residual': res_residual.detach().cpu().numpy()},
         }
         return pred_res
 
     def log_plot(self, batch, save_fig='pred_fields'):
-        pred_res = self.eval_res(batch)
-        real = pred_res['res']['pred']
-        coords = pred_res['res']['input'][:, :2]
-        mask = pred_res['cylinder']['input'][:, :2]
-        fig, axs = plt.subplots(3, 1, num=100, figsize=(15, 15))
-        self.visual.plot_fields_2D(fig, axs, real, None, coords, mask=mask,
-                                   titles=['预测field',], field_names=['p', 'u', 'v'],
-                                   cmaps=['jet', 'jet', 'coolwarm'])
-        if isinstance(save_fig, str):
-            fig.savefig(os.path.join(self.visual.save_path, save_fig + ".jpg"))
-        self.log_dict.update({'Predicted fields':
-                                  wandb.Image(fig2data(fig))})
-        plt.close(fig)
+
+        for time_slice in np.linspace(0, 4, 10):
+            batch_ = self.eval_res(batch)
+
+            real = batch_['all']['target']
+            pred = batch_['all']['pred']
+            coords = batch_['all']['input']
+            fig, axs = plt.subplots(3, 3, num=100, figsize=(20, 8))
+            self.visual.plot_fields_2D(fig, axs, real, pred, coords,
+                                       titles=['真实', '预测', '误差'], field_names=['p', 'u', 'v'],
+                                       cmaps=['jet', 'jet', 'coolwarm'])
+            if isinstance(save_fig, str):
+                fig.savefig(os.path.join(self.visual.save_path, save_fig + ".jpg"))
+            self.log_dict.update({'Predicted fields': wandb.Image(fig2data(fig))})
+            plt.close(fig)
 
 
 
@@ -224,7 +204,7 @@ if __name__ == "__main__":
     from all_config import get_config
     config = get_config()
     pinn_cyl = NavierStokes2DSolver(config)
-    x = bkd.ones([100, 50, 3])
+    x = bkd.ones([100, 50, 3]).to(config.network.device)
     x.requires_grad_(True)
     y = pinn_cyl(x)
     print(y.shape)

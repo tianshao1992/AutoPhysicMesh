@@ -9,7 +9,8 @@
 """
 
 
-from Dataset.dataloader import SpaceMeshDataSet, SpaceMeshDataLoader
+from Dataset.SpaceMesh import SpaceMeshDataSet
+from Dataset.dataloader import DataLoadersManager
 import numpy as np
 import meshio
 
@@ -28,7 +29,6 @@ def inflow_fn(y, fields_num):
 
 def get_dataloader(all_config):
 
-
     data = np.load("data/ns_steady.npy", allow_pickle=True).item()
     u_ref = np.array(data["u"], dtype=np.float32) / all_config.physics.U_star
     v_ref = np.array(data["v"], dtype=np.float32) / all_config.physics.U_star
@@ -43,41 +43,41 @@ def get_dataloader(all_config):
     all_config.physics.W = coords[..., 1].max().item()
 
     fields_num = 3
-    point_sets = {'all': coords[None, ...],
-                  'res': coords, 'ics': coords,
-                  'inflow': inflow_coords, 'outflow': outflow_coords,
-                  'wall': wall_coords, 'cylinder': cylinder_coords}
+    point_sets = {'all': coords,
+                  'res': coords,
+                  'inflow': inflow_coords,
+                  'outflow': outflow_coords,
+                  'wall': wall_coords,
+                  'cylinder': cylinder_coords}
 
     field_sets = {'all': np.stack((p_ref, u_ref, v_ref), axis=-1),
                   'res': np.zeros((coords.shape[0], fields_num), dtype=np.float32),
-                  # Use the last time step of a coarse numerical solution as the initial condition
-                  'ics': np.stack((p_ref[-1], u_ref[-1], v_ref[-1]), axis=-1),
                   'inflow': inflow_fn(inflow_coords[..., (1,)] * all_config.physics.L_star, fields_num),
                   'outflow': np.zeros((outflow_coords.shape[0], fields_num), dtype=np.float32),
                   'wall': np.zeros((wall_coords.shape[0], fields_num), dtype=np.float32),
                   'cylinder': np.zeros((cylinder_coords.shape[0], fields_num), dtype=np.float32)}
 
     all_data = Mesh(point_sets, field_sets)
-
     dataset = SpaceMeshDataSet(all_data)
-    train_loaders = {'res': SpaceMeshDataLoader(dataset(set_name='res', ),
-                                                batch_size=4096, shuffle=True),
-                   'ics': SpaceMeshDataLoader(dataset(set_name='ics', ),
-                                              batch_size=1024, shuffle=True),
-                   'inflow': SpaceMeshDataLoader(dataset(set_name='inflow', ),
-                                                 batch_size=1024, shuffle=True),
-                   'outflow': SpaceMeshDataLoader(dataset(set_name='outflow', ),
-                                                  batch_size=1024, shuffle=True),
-                   'wall': SpaceMeshDataLoader(dataset(set_name='wall', ),
-                                               batch_size=1024, shuffle=True),
-                   'cylinder': SpaceMeshDataLoader(dataset(set_name='cylinder', ),
-                                                   batch_size=1024, shuffle=True),
 
+    train_datasets = {'res': dataset(set_name='res'),
+                      'inflow': dataset(set_name='inflow'),
+                      'outflow': dataset(set_name='outflow'),
+                      'wall': dataset(set_name='wall'),
+                      'cylinder': dataset(set_name='cylinder')
     }
 
-    valid_loaders = {'all': SpaceMeshDataLoader(dataset(set_name='all', train_mode=False,),
-                                               batch_size=1,
-                                               shuffle=False)}
+    train_batch_sizes = {'res': all_config.training.res_batch_size,
+                         'inflow': all_config.training.inflow_batch_size,
+                         'outflow': all_config.training.outflow_batch_size,
+                         'wall': all_config.training.wall_batch_size,
+                         'cylinder': all_config.training.cylinder_batch_size}
+
+    train_loaders = DataLoadersManager(train_datasets, random_seed=2023, batch_sizes=train_batch_sizes)
+
+    valid_datasets = {'all': dataset(set_name='all', train_mode=False,)}
+
+    valid_loaders = DataLoadersManager(valid_datasets, random_seed=2023, batch_sizes=10000)
 
     return train_loaders, valid_loaders
 

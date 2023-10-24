@@ -58,6 +58,7 @@ class BasicSolver(object):
         # pass
         return NotImplementedError("Subclasses should implement this!")
 
+
     def solve(self, epoch, batch, *args, **kwargs):
         self.net_model.train()
         self.optimizer.zero_grad()
@@ -82,14 +83,15 @@ class BasicSolver(object):
             self.loss_weights = None
 
     def save_model(self, path):
-        save_path = os.path.split(os.path.abspath(path))[0]
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
+
+        save_path = path # os.path.join(os.path.split(os.path.abspath(path))[0], path)
+        # if not os.path.exists(save_path):
+        #     os.makedirs(save_path)
         bkd.save({'net_model': self.net_model,
                   'optimizer': self.optimizer,
-                  'scheduler': self.scheduler, }, path)
+                  'scheduler': self.scheduler, }, save_path)
 
-    def load(self, path):
+    def load_model(self, path):
         checkpoint = bkd.load(path)
         self.net_model = checkpoint['net_model']
         self.optimizer = checkpoint['optimizer']
@@ -204,6 +206,10 @@ class BaseEvaluator(object):
         if not os.path.exists(config.wandb.dir):
             os.mkdir(config.wandb.dir)
 
+    @abstractmethod
+    def log_plot(self, batch, *args, **kwargs):
+        pass
+
     def log_losses(self, batch, *args, **kwargs):
         losses = self.module.loss_dict
         for key, values in losses.items():
@@ -215,14 +221,10 @@ class BaseEvaluator(object):
         for key, values in loss_weights.items():
             self.log_dict[key + "_loss_weights"] = values
 
-    @abstractmethod
-    def log_plot(self, batch, *args, **kwargs):
-        pass
-
     def log_lrs(self, batch, *args, **kwargs):
-        lrs = self.module.scheduler.get_last_lr()[0]
+        lrs = self.module.scheduler.get_last_lr()
         # for key, values in lrs.items():
-        self.log_dict["global_learning_rates"] = lrs
+        self.log_dict["global_learning_rates"] = lrs[0]
 
     def log_grads(self, batch, *args, **kwargs):
         gdn_dict = self.module._gdn_dict
@@ -235,7 +237,6 @@ class BaseEvaluator(object):
             self.log_dict[key + "_loss_ntk"] = values
 
     def step(self, epoch, time_sta, time_end, batch, *args, **kwargs):
-
         self.__call__(batch, *args, **kwargs)
         self.logger.log_print(epoch, time_sta, time_end, self.log_dict)
 

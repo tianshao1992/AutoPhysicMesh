@@ -9,9 +9,9 @@
 """
 
 
-from Dataset.dataloader import SpaceMeshDataSet, SpaceMeshDataLoader
+from Dataset.SpaceMesh import SpaceMeshDataSet
+from Dataset.dataloader import DataLoadersManager
 import numpy as np
-import meshio
 
 class Mesh:
     def __init__(self, point_sets, field_sets):
@@ -63,24 +63,28 @@ def get_dataloader(all_config):
     all_data = Mesh(point_sets, field_sets)
 
     dataset = SpaceMeshDataSet(all_data)
-    train_loaders = {'res': SpaceMeshDataLoader(dataset(set_name='res', time_interval=(0, t[-1])),
-                                                batch_size=4096, shuffle=True),
-                   'ics': SpaceMeshDataLoader(dataset(set_name='ics', time_interval=(0, 0)),
-                                              batch_size=1024, shuffle=True),
-                   'inflow': SpaceMeshDataLoader(dataset(set_name='inflow', time_interval=(0, t[-1])),
-                                                 batch_size=1024, shuffle=True),
-                   'outflow': SpaceMeshDataLoader(dataset(set_name='outflow', time_interval=(0, t[-1])),
-                                                  batch_size=1024, shuffle=True),
-                   'wall': SpaceMeshDataLoader(dataset(set_name='wall', time_interval=(0, t[-1])),
-                                               batch_size=1024, shuffle=True),
-                   'cylinder': SpaceMeshDataLoader(dataset(set_name='cylinder', time_interval=(0, t[-1])),
-                                                   batch_size=1024, shuffle=True),
 
+    train_datasets = {'res': dataset(set_name='res', time_interval=(0, t[-1])),
+                     'ics': dataset(set_name='ics', time_interval=(0, 0)),
+                     'inflow': dataset(set_name='inflow', time_interval=(0, t[-1])),
+                     'outflow': dataset(set_name='outflow', time_interval=(0, t[-1])),
+                     'wall': dataset(set_name='wall', time_interval=(0, t[-1])),
+                     'cylinder': dataset(set_name='cylinder', time_interval=(0, t[-1]))
     }
 
-    valid_loaders = {'all': SpaceMeshDataLoader(dataset(set_name='all', time_interval=(0, t[-1]), train_mode=False,),
-                                               batch_size=1,
-                                               shuffle=False)}
+    train_batch_sizes = {'res': all_config.training.res_batch_size,
+                        'ics': all_config.training.ic_batch_size,
+                        'inflow': all_config.training.inflow_batch_size,
+                        'outflow': all_config.training.outflow_batch_size,
+                        'wall': all_config.training.wall_batch_size,
+                        'cylinder': all_config.training.cylinder_batch_size}
+
+
+    train_loaders = DataLoadersManager(train_datasets, random_seed=2023, batch_sizes=train_batch_sizes)
+
+    valid_datasets = {'all': dataset(set_name='all', time_interval=(0, t[-1]), train_mode=False,)}
+
+    valid_loaders = DataLoadersManager(valid_datasets, random_seed=2023, batch_sizes=1)
 
     return train_loaders, valid_loaders
 
@@ -97,6 +101,23 @@ def get_fine_mesh():
 
 
 if __name__ == "__main__":
+    from all_config import get_config
+    all_config = get_config()
+    train_loaders, valid_loaders = get_dataloader(all_config)
 
-    data_loaders = get_dataloader()
+    for batch in train_loaders:
+        print(batch['res']['input'].shape)
+        print(batch['res']['target'].shape)
+        print(batch['ics']['input'].shape)
+        print(batch['ics']['target'].shape)
+        print(batch['inflow']['input'].shape)
+        print(batch['inflow']['target'].shape)
+        print(batch['outflow']['input'].shape)
+        print(batch['outflow']['target'].shape)
+        print(batch['wall']['input'].shape)
+        print(batch['wall']['target'].shape)
+        print(batch['cylinder']['input'].shape)
+        print(batch['cylinder']['target'].shape)
+        break
+
     fine_coords, fine_coords_near_cyl = get_fine_mesh()
