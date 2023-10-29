@@ -8,16 +8,25 @@
 # @Description    : ******
 """
 
-
 __all__ = ["gradient", "jacobian", "hessian"]
 # from model import bkd
-import torch
 backend_name = "pytorch"
+import torch
 
 def gradient(y, x, order=1):
     if order == 1:
-        return torch.autograd.grad(y, x, grad_outputs=torch.ones_like(y),
-                                   create_graph=True, retain_graph=True, only_inputs=True)[0]
+        if backend_name == "pytorch":
+            return torch.autograd.grad(y, x, grad_outputs=torch.ones_like(y),
+                                       create_graph=True, retain_graph=True, only_inputs=True)[0]
+        elif backend_name == "paddle":
+            return paddle.grad(y, x, grad_outputs=paddle.ones_like(y),
+                        create_graph=True,
+                        retain_graph=True,
+                        allow_unused=True,
+                        )[0]
+        elif backend_name == "jax":
+            grad_fn = jax.grad(lambda x: y(x))
+            return (jax.vmap(grad_fn)(x), grad_fn)
     else:
         return gradient(gradient(y, x), x, order=order - 1)
 

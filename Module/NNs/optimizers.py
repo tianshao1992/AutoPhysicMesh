@@ -9,8 +9,6 @@
 """
 __all__ = ['get']
 
-
-from Module import bkd, nn
 from torch.optim import Adam, SGD, RMSprop, Adagrad, Adadelta, AdamW, Adamax, ASGD, LBFGS, Rprop
 from torch.optim.lr_scheduler import StepLR, MultiStepLR, ExponentialLR, CosineAnnealingLR, ReduceLROnPlateau
 
@@ -45,6 +43,7 @@ def get(identifier, *args, **kwargs):
 
 if __name__ == "__main__":
 
+    from Module import bkd, nn
     network = nn.Linear(10, 10)
     optimizer = get('Adam', params=network.parameters(), lr=0.1)
     scheduler = get('StepLR', optimizer=optimizer, step_size=10, gamma=0.1)

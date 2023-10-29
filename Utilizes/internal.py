@@ -9,7 +9,7 @@ import numpy as np
 from matplotlib import animation
 
 from .external import apply
-from .. import backend as bkd
+from .. import Backend as bkd
 from .. import config
 
 

@@ -7,3 +7,14 @@
 # @File    : MetricModule.py
 # @Description    : ******
 """
+
+class Metric(object):
+
+    def __init__(self,
+                 config,
+                 *args,
+                 **kwargs):
+        pass
+
+    def __call__(self):
+        pass

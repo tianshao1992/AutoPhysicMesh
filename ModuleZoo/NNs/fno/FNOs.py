@@ -15,12 +15,12 @@ file_path = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(os.path.join(file_path.split('fno')[0]))
 sys.path.append(os.path.join(file_path.split('Models')[0]))
 
-from Module import bkd, NNs
-from Module.activations import get as get_activation
-from NetZoo.nn.fno.spectral_layers import SpectralConv1d, SpectralConv2d, SpectralConv3d
-from NetZoo.nn.fno.basic_operators import channel_permute, spatial_padding
+from Module import bkd, nn
+from Module.NNs.activations import get as get_activation
+from ModuleZoo.NNs.fno.spectral_layers import SpectralConv1d, SpectralConv2d, SpectralConv3d
+from ModuleZoo.NNs.fno.basic_operators import channel_permute, spatial_padding
 
-class FNO(NNs.Module):
+class FNO(nn.Module):
     """
         1维FNO网络
     """
@@ -80,11 +80,11 @@ class FNO(NNs.Module):
             self._spatial_padding.append(-self.spatial_padding[i] if self.spatial_padding[i] != 0 else None)
 
 
-        self.fc0 = NNs.Linear(self.time_steps * self.input_dim + self.spatial_dim, self.layer_width)
-        self.fc1 = NNs.Linear(self.layer_width, self.last_width)
-        self.fc2 = NNs.Linear(self.last_width, self.output_dim)
+        self.fc0 = nn.Linear(self.time_steps * self.input_dim + self.spatial_dim, self.layer_width)
+        self.fc1 = nn.Linear(self.layer_width, self.last_width)
+        self.fc2 = nn.Linear(self.last_width, self.output_dim)
 
-        self.spectral_convs = NNs.ModuleList()
+        self.spectral_convs = nn.ModuleList()
         for i in range(self.layer_depth):
             if self.spatial_dim == 1:
                 self.spectral_convs.append(SpectralConv1d(self.layer_width, self.layer_width, self.spectral_modes,

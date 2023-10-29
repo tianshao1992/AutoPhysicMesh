@@ -105,3 +105,21 @@ def adapt_loss_weights(loss_dict, models, scheme, pred_batch=None):
         return w, ntk_dict
     else:
         raise NotImplementedError("this adaptive scheme is not supported!")
+
+def casual_loss_weights(time_vector, residual, causal_num, causal_tol, causal_mat):
+
+    # Sort temporal coordinates
+    t_sorted = time_vector.view(-1).sort()[1]
+    # time_vec_ = time_vector[t_sorted]
+
+    residual_ = residual.view(-1, residual.shape[-1])[t_sorted]
+
+    residual_ = residual_.view(causal_num, -1, residual_.shape[-1])
+    residual_causal = bkd.mean(residual_**2, dim=1)
+    gamma = bkd.exp(-causal_tol * (causal_mat.to(time_vector) @ residual_causal)).detach()
+
+    # Take minimum of the causal weights
+    gamma = bkd.min(gamma, dim=0)[0]
+    res_eqs_causal = gamma * residual_causal
+
+    return res_eqs_causal, gamma

@@ -13,11 +13,11 @@
 # sys.path.append(os.path.join(file_path.split('fno')[0]))
 # sys.path.append(os.path.join(file_path.split('Models')[0]))
 
-from Module import bkd, NNs
-from Module.activations import get as get_activation
-from NetZoo.nn.fno.basic_operators import complex_mul1d, complex_mul2d, complex_mul3d
+from Module import bkd, nn
+from Module.NNs.activations import get as get_activation
+from ModuleZoo.NNs.fno.basic_operators import complex_mul1d, complex_mul2d, complex_mul3d
 
-class SpectralConv1d(NNs.Module):
+class SpectralConv1d(nn.Module):
     '''
     1维谱卷积
     Modified Zongyi Li's Spectral1dConv code
@@ -49,16 +49,16 @@ class SpectralConv1d(NNs.Module):
         self.use_complex = use_complex
 
         self.layer_active = get_activation(layer_active)
-        self.layer_dropout = NNs.Dropout(layer_dropout)
-        self.layer_linear = NNs.Conv1d(self.input_dim, self.output_dim, kernel_size=1)  # for residual
+        self.layer_dropout = nn.Dropout(layer_dropout)
+        self.layer_linear = nn.Conv1d(self.input_dim, self.output_dim, kernel_size=1)  # for residual
         # self.linear = nn.Linear(self.in_dim, self.out_dim)
         self.scale = (1 / (input_dim * output_dim))
 
         if self.use_complex:
-            self.weights = NNs.Parameter(self.scale * bkd.rand(input_dim, output_dim, self.spectral_modes[0],
+            self.weights = nn.Parameter(self.scale * bkd.rand(input_dim, output_dim, self.spectral_modes[0],
                                                                dtype=bkd.cfloat))
         else:
-            self.weights = NNs.Parameter(self.scale * bkd.rand(input_dim, output_dim, self.spectral_modes[0], 2,
+            self.weights = nn.Parameter(self.scale * bkd.rand(input_dim, output_dim, self.spectral_modes[0], 2,
                                                                dtype=bkd.float32))
         # xavier_normal_(self.weights1, gain=1 / (in_dim * out_dim))
 
@@ -98,7 +98,7 @@ class SpectralConv1d(NNs.Module):
             return x
 
 
-class SpectralConv2d(NNs.Module):
+class SpectralConv2d(nn.Module):
     '''
     2维谱卷积
     Modified Zongyi Li's SpectralConv2d PyTorch 1.6 code
@@ -127,18 +127,18 @@ class SpectralConv2d(NNs.Module):
         self.spectral_modes = spectral_modes  # Number of Fourier modes to multiply, at most floor(N/2) + 1
 
         self.spectral_norm = spectral_norm
-        self.layer_dropout = NNs.Dropout(layer_dropout)
+        self.layer_dropout = nn.Dropout(layer_dropout)
         self.layer_active = get_activation(layer_active)
         self.return_freq = return_freq
         self.use_complex = use_complex
-        self.layer_linear = NNs.Conv2d(self.input_dim, self.output_dim, kernel_size=1)  # for residual
+        self.layer_linear = nn.Conv2d(self.input_dim, self.output_dim, kernel_size=1)  # for residual
 
         self.scale = (1 / (input_dim * output_dim))
 
-        self.weights = NNs.ParameterList()
+        self.weights = nn.ParameterList()
         if self.use_complex:
             for i in range(2):
-                self.weights.append(NNs.Parameter(
+                self.weights.append(nn.Parameter(
                     self.scale * bkd.rand(input_dim, output_dim,
                                           self.spectral_modes[0], self.spectral_modes[1], dtype=bkd.cfloat)))
 
@@ -146,7 +146,7 @@ class SpectralConv2d(NNs.Module):
         else:
 
             for i in range(2):
-                self.weights.append(NNs.Parameter(
+                self.weights.append(nn.Parameter(
                     self.scale * bkd.rand(input_dim, output_dim,
                                           self.spectral_modes[0], self.spectral_modes[1], 2, dtype=bkd.float32)))
 
@@ -183,7 +183,7 @@ class SpectralConv2d(NNs.Module):
             return x
 
 
-class SpectralConv3d(NNs.Module):
+class SpectralConv3d(nn.Module):
     '''
     三维谱卷积
     Modified Zongyi Li's SpectralConv2d PyTorch 1.6 code
@@ -212,18 +212,18 @@ class SpectralConv3d(NNs.Module):
         self.spectral_modes = spectral_modes  # Number of Fourier modes to multiply, at most floor(N/2) + 1
         self.spectral_norm = spectral_norm
 
-        self.layer_dropout = NNs.Dropout(layer_dropout)
+        self.layer_dropout = nn.Dropout(layer_dropout)
         self.layer_active = get_activation(layer_active)
         self.return_freq = return_freq
         self.use_complex = use_complex
-        self.layer_linear = NNs.Conv3d(self.input_dim, self.output_dim, kernel_size=1)  # for residual
+        self.layer_linear = nn.Conv3d(self.input_dim, self.output_dim, kernel_size=1)  # for residual
         self.scale = (1 / (input_dim * output_dim))
 
-        self.weights = NNs.ParameterList()
+        self.weights = nn.ParameterList()
         if self.use_complex:
             for i in range(4):
                 self.weights.append(
-                    NNs.Parameter(self.scale * bkd.rand(input_dim, output_dim,
+                    nn.Parameter(self.scale * bkd.rand(input_dim, output_dim,
                                                         self.spectral_modes[0],
                                                         self.spectral_modes[1],
                                                         self.spectral_modes[2],
@@ -232,7 +232,7 @@ class SpectralConv3d(NNs.Module):
         else:
             for i in range(4):
                 self.weights.append(
-                    NNs.Parameter(self.scale * bkd.rand(input_dim, output_dim,
+                    nn.Parameter(self.scale * bkd.rand(input_dim, output_dim,
                                                         self.spectral_modes[0],
                                                         self.spectral_modes[1],
                                                         self.spectral_modes[2],

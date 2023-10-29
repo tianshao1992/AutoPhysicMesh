@@ -7,3 +7,15 @@
 # @File    : utils.py
 # @Description    : ******
 """
+
+from Module import bkd
+import numpy as np
+
+def tensor2numpy(obj):
+    """
+    :param obj:
+    :return:
+    """
+    if bkd.is_tensor(obj):
+        obj = obj.cpu().numpy()
+    return obj

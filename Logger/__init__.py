@@ -7,3 +7,8 @@
 # @File    : __init__.py
 # @Description    : ******
 """
+
+from Logger.logger import Printer
+from Logger.visualizer import Visual
+
+__init__ = ['Printer', 'Visual']

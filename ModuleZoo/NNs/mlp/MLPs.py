@@ -8,11 +8,12 @@
 # @Description    : ******
 """
 
-from Module import bkd, NNs
-from Module.activations import get as get_activation
-from NetZoo.nn.mlp.mlp_layers import MlpBlock
+from Module import bkd, nn
+from Module.NNs.activations import get as get_activation
+from ModuleZoo.NNs.mlp.mlp_layers import MlpBlock
 
-class FourierEmbedding(NNs.Module):
+
+class FourierEmbedding(nn.Module):
 
     def __init__(self, input_dim, hidden_dim, output_dim, scale=1.0, modes=1):
         super(FourierEmbedding, self).__init__()
@@ -21,9 +22,11 @@ class FourierEmbedding(NNs.Module):
         self.hidden_dim = hidden_dim
         self.input_dim = input_dim
         self.output_dim = output_dim
-        self.fourier_weight = NNs.Parameter(self.scale * bkd.rand(input_dim, hidden_dim * self.modes, dtype=bkd.float32))
-        self.linear = NNs.Linear(hidden_dim * 2 * self.modes, output_dim)
+        self.fourier_weight = nn.Parameter(self.scale * bkd.rand(input_dim, hidden_dim * self.modes, dtype=bkd.float32))
+        self.linear = nn.Linear(hidden_dim * 2 * self.modes, output_dim)
         self.register_buffer(name='modes_harmonic', tensor=bkd.arange(0, self.modes, 1))
+
+
     def forward(self, x):
         bsz = list(x.shape[:-1])
         h = bkd.matmul(x, self.fourier_weight)
@@ -33,8 +36,39 @@ class FourierEmbedding(NNs.Module):
         y = self.linear(h)
         return y
 
+class PeriodsEmbedding(nn.Module):
 
-class MlpNet(NNs.Module):
+    def __init__(self, input_dim, output_dim, scale=1.0, axis='all', trainable=False):
+        super(PeriodsEmbedding, self).__init__()
+
+        # the axis of x to calculate the harmonic
+        if axis == 'all':
+            self.axis = list(range(input_dim))
+            self.non_axis = []
+        else:
+            self.axis = axis
+            self.non_axis = list(set(range(input_dim)) - set(axis))
+
+        if isinstance(scale, (tuple, list)):
+            assert len(scale) == len(self.axis), "the scale length should be equal to axis"
+            self.register_buffer(name='scale', tensor=bkd.tensor(scale, dtype=bkd.float32))
+        else:
+            self.register_buffer(name='scale', tensor=bkd.tensor([scale]*len(self.axis), dtype=bkd.float32))
+
+        if trainable:
+            self.scale = nn.Parameter(self.scale * bkd.ones((len(self.axis), ), dtype=bkd.float32))
+
+        self.linear = nn.Linear(len(self.axis) * 2 + len(self.non_axis), output_dim)
+
+    def forward(self, x):
+
+        h = bkd.cat((bkd.cos(x[..., self.axis]), bkd.sin(x[..., self.axis])), dim=-1)
+        y = bkd.cat((x[..., self.non_axis], h), dim=-1)
+        y = self.linear(y)
+        return y
+
+
+class MlpNet(nn.Module):
 
     def __init__(self,
                  input_dim: int,
@@ -65,7 +99,7 @@ class MlpNet(NNs.Module):
         self.output_transform = output_transform
         self.use_one_branch = use_one_branch
 
-        if input_transform is None:
+        if input_transform is None or len(input_transform) == 0:
             self.input_transform = MlpBlock(planes=[self.input_dim, self.layer_width],
                                             active=layer_active, last_active=True)
 
@@ -136,3 +170,13 @@ if __name__ == "__main__":
     x = bkd.ones([100, 50, 3])
     y = model(x)
     print(y.shape)
+
+
+    model = PeriodsEmbedding(input_dim=3, output_dim=64, axis=(0, 1), scale=1.0, trainable=True)
+    x = bkd.ones([100, 50, 3])
+    y = model(x)
+    print(y.shape)
+
+    l1 = model
+    l2 = FourierEmbedding(input_dim=64, hidden_dim=16, output_dim=64, modes=10, scale=1.0)
+    print(l2(l1(x)).shape)

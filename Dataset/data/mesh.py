@@ -12,7 +12,7 @@ import os
 import gmsh
 import meshio
 import numpy as np
-from Dataset.data._base_data import BasicData
+from Dataset.data._base import BasicData
 
 class MeshData(BasicData, meshio.Mesh):
     def __init__(self, file):
@@ -40,7 +40,7 @@ class MeshData(BasicData, meshio.Mesh):
             :param file:
             :return:
         """
-        assert os.path.exists(file), 'file not found: ' + file
+        assert os.path.exists(file), 'file not found: {}'.format(file)
         try:
             mesh = meshio.read(file)
             print('meshio.read success!')
@@ -52,6 +52,7 @@ class MeshData(BasicData, meshio.Mesh):
             gmsh.finalize()
             mesh = meshio.read('temp.msh')
             os.remove('temp.msh')
+            print('gmsh.read success!')
         # self.mesh_model = mesh
         # self.mesh_model = mesh
         return mesh
@@ -90,3 +91,14 @@ class MeshData(BasicData, meshio.Mesh):
 
             point_sets.update({field_name: points})
         return point_sets
+
+    def visual_matplot(self, idx: int):
+        r"""
+            visual mesh by matplot
+            :param idx: the index of the field
+            :return:
+        """
+        import matplotlib.pyplot as plt
+        fig = plt.figure(1)
+        plt.scatter(self.points[:, 0], self.points[:, 1], s=0.5)
+        plt.show()

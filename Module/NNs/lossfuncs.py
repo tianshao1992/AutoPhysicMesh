@@ -10,16 +10,19 @@
 
 __all__ = ['get']
 
-from Module import bkd, nn
+from Module import bkd, NNs
 
-def mean_absolute_error(y_pred, y_true):
+# todo: add more loss functions
+# todo: support multi-targets
+# todo: support parameters inputs
+def mean_absolute_error(y_pred, y_true, *args, **kwargs):
     """
     calculate the mean absolute error between y_true and y_pred
     """
     return bkd.mean(bkd.abs(y_true - y_pred))
 
 
-def mean_absolute_percentage_error(y_pred, y_true):
+def mean_absolute_percentage_error(y_pred, y_true, *args, **kwargs):
     """
     calculate the mean absolute percentage error between y_true and y_pred
     """
@@ -27,14 +30,14 @@ def mean_absolute_percentage_error(y_pred, y_true):
     return bkd.mean(bkd.abs((y_true - y_pred) / y_true)) * 100
 
 
-def mean_squared_error(y_pred, y_true):
+def mean_squared_error(y_pred, y_true, *args, **kwargs):
     """
     calculate the mean squared error between y_true and y_pred
     """
     return bkd.mean(bkd.square(y_true - y_pred))
 
 
-def mean_lp_error(y_pred, y_true, p=2):
+def mean_lp_error(y_pred, y_true, p=2, *args, **kwargs):
     """
     calculate the mean Lp error between y_true and y_pred
     p is the order of the norm
@@ -42,7 +45,7 @@ def mean_lp_error(y_pred, y_true, p=2):
     return bkd.mean(bkd.norm(y_true - y_pred, p, dim=None))
 
 
-def mean_lp_relative_error(y_pred, y_true, p=2):
+def mean_lp_relative_error(y_pred, y_true, p=2, *args, **kwargs):
     """
     calculate the mean Lp relative error between y_true and y_pred
     p is the order of the norm
@@ -50,7 +53,7 @@ def mean_lp_relative_error(y_pred, y_true, p=2):
     return bkd.mean(bkd.norm(y_true - y_pred, p, dim=None) / bkd.norm(y_true, p, dim=None))
 
 
-def softmax_cross_entropy(y_pred, y_true):
+def softmax_cross_entropy(y_pred, y_true, *args, **kwargs):
     """
     calculate the softmax cross entropy between y_true and y_pred
     """
@@ -84,7 +87,7 @@ LOSS_DICT = {
 }
 
 
-def get(identifier):
+def get(identifier, *args, **kwargs):
     """Retrieves a loss function.
 
     Args:
@@ -95,7 +98,6 @@ def get(identifier):
     """
     if isinstance(identifier, (list, tuple)):
         return list(map(get, identifier))
-
     if isinstance(identifier, str):
         return LOSS_DICT[identifier]
     if callable(identifier):

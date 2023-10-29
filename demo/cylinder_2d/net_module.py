@@ -12,25 +12,27 @@ import wandb
 import matplotlib.pyplot as plt
 
 from Module import bkd
-from NetZoo.nn.mlp.MLPs import FourierEmbedding, MlpNet
-from Module.pinn import BasicSolver, BaseEvaluator
-from Module.autograd import gradient
-from Module.lossfuncs import get as get_loss
+from ModuleZoo.NNs.mlp.MLPs import FourierEmbedding, MlpNet
+from Module.FusionModule import PinnSolver, PinnEvaluator
+from Module.NNs.autograd import gradient
+from Module.NNs.lossfuncs import get as get_loss
 from Utilizes.commons import fig2data
 loss_func = get_loss('mse')
 
-class NavierStokes2DSolver(BasicSolver):
-    def __init__(self, config):
+class NavierStokes2DSolver(PinnSolver):
+    def __init__(self, config, ):
         # super(NavierStokes2D, self).__init__()
 
-        self.config_setup(config)
-        self.loss_dict = {}
-        self.ntk_dict = {}
-        self.total_loss = 1e20
+        if config.Network.fourier_emb is not None:
+            config.Network.input_transform = FourierEmbedding(**config.Network.fourier_emb)
+        net_model = MlpNet(**config.Network)
+
+        super(NavierStokes2DSolver, self).__init__(config, models=net_model)
+        # self.config_setup(config)
 
     def forward(self, inn_var):
         out_var = self.input_transform(inn_var)
-        out_var = self.net_model(out_var)
+        out_var = self.models(out_var)
         # out_var = self.output_transform(inn_var, out_var)
         return out_var
 
@@ -62,7 +64,7 @@ class NavierStokes2DSolver(BasicSolver):
         res_c = dudx + dvdy
 
         # outflow boundary residual
-        u_out = dudx / self.Re - p
+        u_out = dudx - p
         v_out = dvdx
 
         return bkd.cat((res_x, res_y, res_c), dim=-1), bkd.cat((u_out, v_out), dim=-1)
@@ -76,7 +78,7 @@ class NavierStokes2DSolver(BasicSolver):
         res_batch = batch["res"]
 
         # residual loss
-        res_input = res_batch['input'].to(self.config.network.device)
+        res_input = res_batch['input'].to(self.config.Device)
         res_input.requires_grad_(True)
         res_pred = self.forward(inn_var=res_input)
         res_pred, _ = self.residual(inn_var=res_input, out_var=res_pred)
@@ -85,14 +87,14 @@ class NavierStokes2DSolver(BasicSolver):
         res_loss_c = loss_func(res_pred[..., (2,)], 0)
 
         # inflow loss
-        inflow_input, inflow_true = (inflow_batch['input'].to(self.config.network.device),
-                                     inflow_batch['target'].to(self.config.network.device))
+        inflow_input, inflow_true = (inflow_batch['input'].to(self.config.Device),
+                                     inflow_batch['target'].to(self.config.Device))
         inflow_pred = self.forward(inn_var=inflow_input)
         inflow_loss_u = loss_func(inflow_pred[..., (1,)], inflow_true[..., (1,)])
         inflow_loss_v = loss_func(inflow_pred[..., (2,)], 0)
 
         # outflow loss
-        outflow_input = outflow_batch['input'].to(self.config.network.device)
+        outflow_input = outflow_batch['input'].to(self.config.Device)
         outflow_input.requires_grad_(True)
         outflow_pred = self.forward(inn_var=outflow_input)
         _, outflow_res = self.residual(outflow_input, outflow_pred)
@@ -100,13 +102,13 @@ class NavierStokes2DSolver(BasicSolver):
         outflow_loss_v = loss_func(outflow_res[..., (1,)], 0)
 
         # wall loss
-        wall_input = wall_batch['input'].to(self.config.network.device)
+        wall_input = wall_batch['input'].to(self.config.Device)
         wall_pred = self.forward(inn_var=wall_input)
         wall_loss_u = loss_func(wall_pred[..., (1,)], 0)
         wall_loss_v = loss_func(wall_pred[..., (2,)], 0)
 
         # wall loss
-        cylinder_input = cylinder_batch['input'].to(self.config.network.device)
+        cylinder_input = cylinder_batch['input'].to(self.config.Device)
         cylinder_pred = self.forward(inn_var=cylinder_input)
         cylinder_loss_u = loss_func(cylinder_pred[..., (1,)], 0)
         cylinder_loss_v = loss_func(cylinder_pred[..., (2,)], 0)
@@ -129,20 +131,33 @@ class NavierStokes2DSolver(BasicSolver):
         return self.loss_dict
 
     def config_setup(self, config):
-
-        if config.network.fourier_emb is not None:
-            config.network.input_transform = FourierEmbedding(**config.network.fourier_emb)
-
-        self.net_model = MlpNet(**config.network)
-
         super().config_setup(config)
-
         # Non-dimensionalized domain length and width
         self.L, self.W, self.T = config.physics.L, config.physics.W, config.physics.T
         self.Re = config.physics.Re  # Reynolds number
 
         self.U_star = config.physics.U_star
         self.L_star = config.physics.L_star
+
+    def valid(self, batch):
+
+        valid_batch = batch["all"]
+        # residual loss
+        res_input = valid_batch['input'].to(self.config.Device)
+        res_input.requires_grad_(True)
+        res_pred = self.forward(inn_var=res_input)
+        res_residual, _ = self.residual(inn_var=res_input, out_var=res_pred)
+
+        batch["all"].update({"pred": res_pred.detach().cpu().numpy(),
+                             "residual": res_residual.detach().cpu().numpy()})
+
+        inflow_batch = batch["inflow"]
+        # residual loss
+        inflow_input = inflow_batch['input'].to(self.config.Device)
+        inflow_pred = self.forward(inn_var=inflow_input)
+        batch["inflow"].update({"pred": inflow_pred.detach().cpu().numpy()})
+
+        return batch
 
 
     def input_transform(self, inn_var):
@@ -151,48 +166,63 @@ class NavierStokes2DSolver(BasicSolver):
         return bkd.cat((x, y), dim=-1)
 
     def output_transform(self, inn_var, out_var):
-        y_hat = inn_var[..., (1,)] * self.L_star * self.W
+        y_hat = inn_var[..., (1,)] * self.W
         out_var[..., (1,)] += 4 * 0.3 * y_hat * (0.41 - y_hat) / (0.41**2)
         return out_var
 
-class NavierStokes2DEvaluator(BaseEvaluator):
-    def __init__(self, config, model):
-        super().__init__(config, model)
+class NavierStokes2DEvaluator(PinnEvaluator):
+    def __init__(self, config, board):
+        super().__init__(config, board)
         pass
 
+    def log_plots(self, state, batch, save_fig='pred_fields'):
 
-    def eval_res(self, batch):
-        self.module.net_model.eval()
-        valid_batch = batch["all"]
+        real = batch['all']['target']
+        pred = batch['all']['pred']
+        coords = batch['all']['input']
+        residual = batch['all']['residual']
 
-        # residual loss
-        res_input = valid_batch['input'].to(self.config.network.device)
-        res_input.requires_grad_(True)
-        res_pred = self.module.forward(inn_var=res_input)
-        res_residual, _ = self.module.residual(inn_var=res_input, out_var=res_pred)
+        cylinder = batch['cylinder']['input']
 
-        pred_res = {
-            "all": {'input': res_input.detach().cpu().numpy(),
-                    'pred': res_pred.detach().cpu().numpy(),
-                    'target': valid_batch['target'].numpy(),
-                    'residual': res_residual.detach().cpu().numpy()},
-        }
-        return pred_res
-
-    def log_plot(self, batch, save_fig='pred_fields'):
-
-        batch_ = self.eval_res(batch)
-        real = batch_['all']['target']
-        pred = batch_['all']['pred']
-        coords = batch_['all']['input']
+        # draw the predicted fields
         fig, axs = plt.subplots(3, 3, num=100, figsize=(20, 8))
         self.visual.plot_fields_2D(fig, axs, real, pred, coords,
                                    titles=['真实', '预测', '误差'], field_names=['p', 'u', 'v'],
                                    cmaps=['jet', 'jet', 'coolwarm'])
         if isinstance(save_fig, str):
             fig.savefig(os.path.join(self.visual.save_path, save_fig + ".jpg"))
-        self.log_dict.update({'Predicted fields': wandb.Image(fig2data(fig))})
         plt.close(fig)
+        self.log_dict.update({'Predicted fields': wandb.Image(fig2data(fig))})
+
+        # draw the pde residual loss
+        fig, axs = plt.subplots(3, 1, num=101, figsize=(8, 8))
+        self.visual.plot_fields_2D(fig, axs, residual, None, coords,
+                                   titles=['残差',], field_names=['x动量', 'y动量', '连续性'],
+                                   cmaps=['jet', 'jet', 'coolwarm'])
+
+        if isinstance(save_fig, str):
+            fig.savefig(os.path.join(self.visual.save_path, save_fig + "_residuals.jpg"))
+
+        self.log_dict.update({'Predicted residual': wandb.Image(fig2data(fig))})
+        plt.close(fig)
+
+        real = batch['inflow']['target']
+        pred = batch['inflow']['pred']
+        coords = batch['inflow']['input']
+        index = coords[..., 1].argsort()
+
+
+        # draw the pde residual loss
+        fig, axs = plt.subplots(3, 2, num=101, figsize=(8, 8))
+        self.visual.plot_fields_1D(fig, axs, real[index], pred[index], coords[index, 1],
+                                   titles=['物理场', '误差'], field_names=['速度u', '速度v', '压强p'])
+
+        if isinstance(save_fig, str):
+            fig.savefig(os.path.join(self.visual.save_path, save_fig + "_inflow.jpg"))
+
+        self.log_dict.update({'Inflow fields': wandb.Image(fig2data(fig))})
+        plt.close(fig)
+
 
 
 if __name__ == "__main__":

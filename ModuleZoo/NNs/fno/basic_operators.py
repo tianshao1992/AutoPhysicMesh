@@ -8,7 +8,7 @@
 # @Description    : ******
 """
 
-from Module import bkd, NNs
+from Module import bkd, nn
 import torch.nn.functional as F
 
 def complex_mul1d(input, weights, use_complex=True):
@@ -35,7 +35,7 @@ def complex_mul2d(input, weights, use_complex=True):
 
 
 def complex_mul3d(input, weights, use_complex=True):
-    # (batch, in_channel, x,y,t ), (in_channel, out_channel, x,y,t) -> (batch, out_channel, x,y,t)
+    # (batch, in_channel, x,y,z), (in_channel, out_channel, x,y,z) -> (batch, out_channel, x,y,z)
     if use_complex:
         return bkd.einsum("bixyz,ioxyz->boxyz", input, weights)
     else:

@@ -11,17 +11,21 @@
 import os
 import sys
 import copy
+import math
+
+import torch
 
 # add configs.py path
 file_path = os.path.abspath(os.path.dirname(__file__))
-sys.path.append(os.path.join(file_path.split('transformer')[0]))
+sys.path.append(os.path.join(file_path.split('Transformer')[0]))
 sys.path.append(os.path.join(file_path.split('Models')[0]))
 
-from torch.nn.init import xavier_uniform_, constant_, xavier_normal_, orthogonal_
 from einops.layers.torch import Rearrange
 from einops import rearrange, repeat, reduce
-from Models.configs import *
+from torch.nn.init import xavier_uniform_, constant_, xavier_normal_, orthogonal_ #
 
+from Module import bkd, nn
+from Module.NNs.activations import get as get_activations
 
 def attention(query, key, value,
               mask=None, dropout=None, weight=None,
@@ -35,7 +39,7 @@ def attention(query, key, value,
     d_k = query.size(-1)
 
     if attention_type == 'cosine':
-        p_attn = F.cosine_similarity(query, key.transpose(-2, -1)) \
+        p_attn = bkd.cosine_similarity(query, key.transpose(-2, -1)) \
                  / math.sqrt(d_k)
     else:
         scores = torch.matmul(query, key.transpose(-2, -1)) \
@@ -45,16 +49,16 @@ def attention(query, key, value,
         if attention_type == 'softmax':
             if mask is not None:
                 scores = scores.masked_fill(mask == 0, -1e9)
-            p_attn = F.softmax(scores, dim=-1)
+            p_attn = bkd.softmax(scores, dim=-1)
         elif attention_type in ['fourier', 'integral', 'local']:
             if mask is not None:
                 scores = scores.masked_fill(mask == 0, 0)
             p_attn = scores / seq_len
 
     if dropout is not None:
-        p_attn = F.dropout(p_attn)
+        p_attn = dropout(p_attn)
 
-    out = torch.matmul(p_attn, value)
+    out = bkd.matmul(p_attn, value)
 
     return out, p_attn
 
@@ -74,7 +78,7 @@ def linear_attention(query, key, value,
     if attention_type in ['linear', 'global']:
         query = query.softmax(dim=-1)
         key = key.softmax(dim=-2)
-    scores = torch.matmul(key.transpose(-2, -1), value)
+    scores = bkd.matmul(key.transpose(-2, -1), value)
 
     if mask is not None:
         raise RuntimeError("linear attention does not support casual mask.")
@@ -82,9 +86,9 @@ def linear_attention(query, key, value,
     p_attn = scores / seq_len
 
     if dropout is not None:
-        p_attn = F.dropout(p_attn)
+        p_attn = dropout(p_attn)
 
-    out = torch.matmul(query, p_attn)
+    out = bkd.matmul(query, p_attn)
     return out, p_attn
 
 
@@ -107,13 +111,13 @@ def causal_linear_attn(query, key, value, kv_mask=None, dropout=None, eps=1e-7):
     b_k_sum = b_k.sum(dim=-2)
     b_k_cumsum = b_k_sum.cumsum(dim=-2).type(dtype)
 
-    p_attn = torch.einsum('bhund,bhune->bhude', b_k, b_v)
+    p_attn = bkd.einsum('bhund,bhune->bhude', b_k, b_v)
     p_attn = p_attn.cumsum(dim=-3).type(dtype)
     if dropout is not None:
-        p_attn = F.dropout(p_attn)
+        p_attn = dropout(p_attn)
 
-    D_inv = 1. / torch.einsum('bhud,bhund->bhun', b_k_cumsum + eps, b_q)
-    attn = torch.einsum('bhund,bhude,bhun->bhune', b_q, p_attn, D_inv)
+    D_inv = 1. / bkd.einsum('bhud,bhund->bhun', b_k_cumsum + eps, b_q)
+    attn = bkd.einsum('bhund,bhude,bhun->bhune', b_q, p_attn, D_inv)
     return attn.reshape(*query.shape), p_attn
 
 
@@ -130,12 +134,11 @@ class PositionalEncoding(nn.Module):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(dropout)
 
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(
-            0, d_model, 2).float() * (-math.log(2 ** 13) / d_model))
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = bkd.zeros(max_len, d_model)
+        position = bkd.arange(0, max_len, dtype=bkd.float32).unsqueeze(1)
+        div_term = bkd.exp(bkd.arange(0, d_model, 2).float() * (-math.log(2 ** 13) / d_model))
+        pe[:, 0::2] = bkd.sin(position * div_term)
+        pe[:, 1::2] = bkd.cos(position * div_term)
         pe = pe.unsqueeze(0)
         self.register_buffer('pe', pe)
 
@@ -151,7 +154,7 @@ class PositionalEncoding(nn.Module):
 class RotaryEmbedding(nn.Module):
     def __init__(self, dim, min_freq=1 / 64, scale=1.):
         super().__init__()
-        inv_freq = 1. / (10000 ** (torch.arange(0, dim, 2).float() / dim))
+        inv_freq = 1. / (10000 ** (bkd.arange(0, dim, 2).float() / dim))
         self.min_freq = min_freq
         self.scale = scale
         self.register_buffer('inv_freq', inv_freq)
@@ -160,13 +163,13 @@ class RotaryEmbedding(nn.Module):
         # coordinates [b, n]
         t = coordinates.to(device).type_as(self.inv_freq)
         t = t * (self.scale / self.min_freq)
-        freqs = torch.einsum('... i , j -> ... i j', t, self.inv_freq)  # [b, n, d//2]
-        return torch.cat((freqs, freqs), dim=-1)  # [b, n, d]
+        freqs = bkd.einsum('... i , j -> ... i j', t, self.inv_freq)  # [b, n, d//2]
+        return bkd.cat((freqs, freqs), dim=-1)  # [b, n, d]
 
 def rotate_half(x):
     x = rearrange(x, '... (j d) -> ... j d', j=2)
     x1, x2 = x.unbind(dim=-2)
-    return torch.cat((-x2, x1), dim=-1)
+    return bkd.cat((-x2, x1), dim=-1)
 
 
 def apply_rotary_pos_emb(t, freqs):
@@ -180,7 +183,7 @@ def apply_2d_rotary_pos_emb(t, freqs_x, freqs_y):
     d = t.shape[-1]
     t_x, t_y = t[..., :d//2], t[..., d//2:]
 
-    return torch.cat((apply_rotary_pos_emb(t_x, freqs_x),
+    return bkd.cat((apply_rotary_pos_emb(t_x, freqs_x),
                       apply_rotary_pos_emb(t_y, freqs_y)), dim=-1)
 
 
@@ -191,7 +194,7 @@ def apply_3d_rotary_pos_emb(t, freqs_x, freqs_y, freqs_z):
     d = t.shape[-1]
     t_x, t_y, t_z = t[..., :d//2], t[..., d//2:],
 
-    return torch.cat((apply_rotary_pos_emb(t_x, freqs_x),
+    return bkd.cat((apply_rotary_pos_emb(t_x, freqs_x),
                       apply_rotary_pos_emb(t_y, freqs_y)), dim=-1)
 
 
@@ -200,23 +203,24 @@ class FeedForward(nn.Module):
     FeedForward layer in transformers
     """
 
-    def __init__(self, in_dim=256,
+    def __init__(self,
+                 input_dim=256,
                  dim_feedforward: int = 1024,
-                 out_dim=None,
+                 output_dim=None,
                  batch_norm=False,
-                 activation='relu',
+                 layer_active='relu',
                  dropout=0.1):
         super(FeedForward, self).__init__()
-        if out_dim is None:
-            out_dim = in_dim
+        if output_dim is None:
+            output_dim = input_dim
         n_hidden = dim_feedforward
         # activation = default(activation, 'relu')
-        self.lr1 = nn.Linear(in_dim, n_hidden)
-        self.activation = activation_dict[activation]
+        self.lr1 = nn.Linear(input_dim, n_hidden)
+        self.activation = get_activations(layer_active)
         self.batch_norm = batch_norm
         if self.batch_norm:
             self.bn = nn.BatchNorm1d(n_hidden)
-        self.lr2 = nn.Linear(n_hidden, out_dim)
+        self.lr2 = nn.Linear(n_hidden, output_dim)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
@@ -320,10 +324,10 @@ class SimpleAttention(nn.Module):
                 if self.norm_type == 'instance':
                     key, value = key.transpose(-2, -1), value.transpose(-2, -1)
 
-                key = torch.stack(
+                key = bkd.stack(
                     [norm(x) for norm, x in
                      zip(self.norm_K, (key[:, i, ...] for i in range(self.n_head)))], dim=1)
-                value = torch.stack(
+                value = bkd.stack(
                     [norm(x) for norm, x in
                      zip(self.norm_V, (value[:, i, ...] for i in range(self.n_head)))], dim=1)
 
@@ -333,10 +337,10 @@ class SimpleAttention(nn.Module):
                 if self.norm_type == 'instance':
                     key, query = key.transpose(-2, -1), query.transpose(-2, -1)
 
-                key = torch.stack(
+                key = bkd.stack(
                     [norm(x) for norm, x in
                      zip(self.norm_K, (key[:, i, ...] for i in range(self.n_head)))], dim=1)
-                query = torch.stack(
+                query = bkd.stack(
                     [norm(x) for norm, x in
                      zip(self.norm_Q, (query[:, i, ...] for i in range(self.n_head)))], dim=1)
 
@@ -347,7 +351,7 @@ class SimpleAttention(nn.Module):
             assert pos.size(-1) == self.pos_dim
             pos = pos.unsqueeze(1)
             pos = pos.repeat([1, self.n_head, 1, 1])
-            query, key, value = [torch.cat([pos, x], dim=-1)
+            query, key, value = [bkd.cat([pos, x], dim=-1)
                                  for x in (query, key, value)]
 
         if self.attention_type in ['linear', 'galerkin', 'global']:
@@ -384,8 +388,8 @@ class SimpleAttention(nn.Module):
                 xavier_uniform_(param, gain=self.xavier_init)
                 if self.diagonal_weight > 0.0:
                     param.data += self.diagonal_weight * \
-                                  torch.diag(torch.ones(
-                                      param.size(-1), dtype=torch.float))
+                                  bkd.diag(bkd.ones(
+                                      param.size(-1), dtype=bkd.float32))
                 if self.symmetric_init:
                     param.data += param.data.T
                     # param.data /= 2.0
@@ -538,10 +542,10 @@ class CrossAttention(nn.Module):
                 if self.norm_type == 'instance':
                     key, value = key.transpose(-2, -1), value.transpose(-2, -1)
 
-                key = torch.stack(
+                key = bkd.stack(
                     [norm(x) for norm, x in
                      zip(self.norm_K, (key[:, i, ...] for i in range(self.n_head)))], dim=1)
-                value = torch.stack(
+                value = bkd.stack(
                     [norm(x) for norm, x in
                      zip(self.norm_V, (value[:, i, ...] for i in range(self.n_head)))], dim=1)
 
@@ -551,10 +555,10 @@ class CrossAttention(nn.Module):
                 if self.norm_type == 'instance':
                     key, query = key.transpose(-2, -1), query.transpose(-2, -1)
 
-                key = torch.stack(
+                key = bkd.stack(
                     [norm(x) for norm, x in
                      zip(self.norm_K, (key[:, i, ...] for i in range(self.n_head)))], dim=1)
-                query = torch.stack(
+                query = bkd.stack(
                     [norm(x) for norm, x in
                      zip(self.norm_Q, (query[:, i, ...] for i in range(self.n_head)))], dim=1)
 
@@ -565,7 +569,7 @@ class CrossAttention(nn.Module):
             assert pos.size(-1) == self.pos_dim
             pos = pos.unsqueeze(1)
             pos = pos.repeat([1, self.n_head, 1, 1])
-            query, key, value = [torch.cat([pos, x], dim=-1)
+            query, key, value = [bkd.cat([pos, x], dim=-1)
                                  for x in (query, key, value)]
 
         if self.attention_type in ['linear', 'galerkin', 'global']:
@@ -602,8 +606,8 @@ class CrossAttention(nn.Module):
                 xavier_uniform_(param, gain=self.xavier_init)
                 if self.diagonal_weight > 0.0:
                     param.data += self.diagonal_weight * \
-                                  torch.diag(torch.ones(
-                                      param.size(-1), dtype=torch.float))
+                                  bkd.diag(bkd.ones(
+                                           param.size(-1), dtype=bkd.float32))
                 if self.symmetric_init:
                     param.data += param.data.T
                     # param.data /= 2.0
@@ -659,9 +663,9 @@ class CrossAttention(nn.Module):
 
 
 if __name__ == '__main__':
-    Q = torch.ones([10, 100, 512])
-    K = torch.ones([10, 100, 512])
-    V = torch.ones([10, 100, 512])
+    Q = bkd.ones([10, 100, 512])
+    K = bkd.ones([10, 100, 512])
+    V = bkd.ones([10, 100, 512])
     layer = SimpleAttention(n_head=8, d_model=512, norm_type='instance', norm_add=True)
     y = layer(Q, K, V)
     print(y)

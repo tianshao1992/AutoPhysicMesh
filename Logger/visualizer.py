@@ -8,7 +8,6 @@
 # @Description    : ******
 """
 import os
-import logging
 import sys
 import pandas as pd
 import numpy as np
@@ -24,6 +23,33 @@ from matplotlib.ticker import MultipleLocator
 from matplotlib.animation import FuncAnimation
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 # mpl.use('Agg')
+
+from Module.utils import tensor2numpy
+
+def adjacent_values(vals, q1, q3):
+    """
+    生成四分点，plot_violin
+    """
+    upper_adjacent_value = q3 + (q3 - q1) * 1.5
+    upper_adjacent_value = np.clip(upper_adjacent_value, q3, vals[-1])
+
+    lower_adjacent_value = q1 - (q3 - q1) * 1.5
+    lower_adjacent_value = np.clip(lower_adjacent_value, vals[0], q1)
+    return lower_adjacent_value, upper_adjacent_value
+
+def set_axis_style(ax, labels, position=None):
+    """
+    生成四分点，plot_violin
+    """
+    ax.get_xaxis().set_tick_params(direction='out')
+    ax.xaxis.set_ticks_position('bottom')
+    if position is None:
+        ax.set_xticks(np.arange(1, len(labels) + 1))
+        ax.set_xlim(0.25, len(labels) + 0.75)
+    else:
+        ax.set_xticks(position)
+        ax.set_xlim(1.5 * position[0] - 0.5 * position[1], 1.5 * position[-1] - 0.5 * position[-2])
+    ax.set_xticklabels(labels)
 
 
 class Visual(object):
@@ -104,6 +130,289 @@ class Visual(object):
 
             rcParams.update(config)
 
+
+
+    def plot_scatter(self, fig, axs, x, y,
+                     title=None, axis_log=(False, False), xylabels=('x', 'y')):
+        r"""
+            plot the scatter of x and y
+            Args:
+                :param fig:
+                :param axs:
+                :param true:
+                :param pred:
+                :param title:
+                :param axis_log:
+                :param xylabels:
+            :return:
+                None
+        """
+        # sbn.set(color_codes=True)
+
+        axs.scatter(np.arange(x.shape[0]), x, marker='*')
+        axs.scatter(np.arange(y.shape[0]), y, marker='.')
+
+        if axis_log[0]:
+            axs.semilogx()
+        if axis_log[1]:
+            axs.semilogy()
+
+        axs.grid(True)  # 添加网格
+        axs.legend(loc="best")
+        axs.set_xlabel(xylabels[0])
+        axs.set_ylabel(xylabels[1])
+        axs.tick_params('both')
+        axs.set_title(title)
+
+    def plot_regression(self, fig, axs, true, pred,
+                        error_ratio=0.05, title=None,
+                        axis_log=(False, False),
+                        xylabels=('true value', 'pred value')):
+        r"""
+            plot the regression of true and pred
+            Args:
+                :param fig:
+                :param axs:
+                :param true:
+                :param pred:
+                :param error_ratio:
+                :param title:
+                :param axis_log:
+                :param xylabels:
+            :return:
+                None
+        """
+        # sbn.set(color_codes=True)
+
+        real = tensor2numpy(true)
+        pred = tensor2numpy(pred)
+
+        max_value = max(true)  # math.ceil(max(true)/100)*100
+        min_value = min(true)  # math.floor(min(true)/100)*100
+        split_value = np.linspace(min_value, max_value, 11)
+
+        split_dict = {}
+        split_label = np.zeros(len(true), np.int32)
+        for i in range(len(split_value)):
+            split_dict[i] = str(split_value[i])
+            index = true >= split_value[i]
+            split_label[index] = i + 1
+
+        axs.scatter(true, pred, marker='.', color='firebrick', linewidth=2.0)
+        axs.plot([min_value, max_value], [min_value, max_value], '-', color='steelblue', linewidth=5.0)
+        # 在两个曲线之间填充颜色
+        axs.fill_between([min_value, max_value], [(1-error_ratio) * min_value, (1-error_ratio) * max_value],
+                         [((1+error_ratio)) * min_value, ((1+error_ratio)) * max_value],
+                         alpha=0.2, color='steelblue')
+
+        if axis_log[0]:
+            axs.semilogx()
+        if axis_log[1]:
+            axs.semilogy()
+
+        axs.set_xlim((min_value, max_value))
+        # axs.set_ylim((min_value, max_value))
+        axs.grid(True)  # 添加网格
+        axs.set_xlabel(xylabels[0])
+        axs.set_ylabel(xylabels[1])
+        axs.tick_params('both')
+        axs.set_title(title)
+        axs.legend(['真实-预测', 'y=x', '±{:.2f}%'.format(error_ratio*100)])
+
+
+    def plot_error(self, fig, axs, error, error_ratio=0.05, title=None, rel_error=False,
+                   xylabels=('predicted error / %', 'distribution density')):
+        # sbn.set_color_codes()
+        # ax.bar(np.arange(len(error)), error*100, )
+
+        if rel_error:
+            error = pd.DataFrame(error) * 100 # 转换格式
+            acc = (np.abs(np.array(error)) < error_ratio * 100).sum() / error.shape[0]
+        else:
+            error = pd.DataFrame(error)
+            acc = (np.abs(np.array(error)) < error_ratio).sum() / error.shape[0]
+
+        # 绘制针对单变量的分布图
+        sbn.distplot(error, bins=20, norm_hist=True, rug=True, fit=stats.norm, kde=False,
+                     rug_kws={"color": "forestgreen"},
+                     fit_kws={"color": "firebrick", "lw": 3},
+                     hist_kws={"color": "steelblue"},
+                     ax=axs)
+        # plt.xlim([-1, 1])
+        if title is None:
+            if rel_error:
+                title = '平均误差小于 {:.2f}% \n 占比为{:.2f}%'.format(error_ratio * 100, acc * 100)
+            else:
+                title = '平均误差小于 {:.2f} \n 占比为{:.2f}%'.format(error_ratio, acc * 100)
+
+        axs.grid(True)  # 添加网格
+        # axs.legend(loc="best", prop=self.font)
+        axs.set_xlabel(xylabels[0])
+        axs.set_ylabel(xylabels[1])
+        axs.tick_params('both')
+        axs.set_title(title)
+
+    def plot_box(self, fig, ax, data,
+                 title=None,
+                 legends=None,
+                 xylabels=None,
+                 xticks=None,
+                 bag_width=1.0):
+
+        r"""
+            plot the box of data
+            Args:
+                :param fig:
+                :param ax:
+                :param data:
+                :param title:
+                :param legends:
+                :param xlabel:
+                :param xticks:
+                :param bag_width:
+            :return:
+                None
+        """
+
+
+        #绘制箱形图
+        ax.set_title(title)
+        ax.semilogy()
+        ax.grid()
+        n_vin = data.shape[-1]
+        colors_map = ['#E4DACE', '#E5BB4B', '#498EAF', '#631F16']
+        if len(data.shape) == 2:
+            positions = np.arange(n_vin) + 1
+            x_pos = None
+            n_bag = 1
+        else:
+            n_bag = data.shape[-2]
+            p = (np.linspace(0, 1, n_vin + 2) - 0.5) * bag_width
+            positions = np.hstack([p[1:-1] + 0.5 + i for i in range(n_bag)]) * n_vin
+            x_pos = np.arange(n_bag) * n_vin + n_vin / 2
+        # parts = ax.boxplot(data.reshape(data.shape[0], -1), widths=0.5 * bag_width, positions=positions, vert=True,
+        #                    patch_artist=True, )
+        parts = ax.boxplot(data.reshape(data.shape[0], -1).T,
+                           widths=0.5 * bag_width, positions=positions,
+                           vert=True, patch_artist=True, )
+
+        for i in range(n_vin):
+            for j in range(n_bag):
+                parts['boxes'][i + j * n_vin].set_facecolor(colors_map[i%len(colors_map)])  # violin color
+                parts['boxes'][i + j * n_vin].set_edgecolor('grey')  # violin edge
+                parts['boxes'][i + j * n_vin].set_alpha(0.9)
+        if legends is not None:
+            ax.legend(legends)
+        if xticks is None:
+            xticks = np.arange(n_vin * n_bag)
+        ax.set_xlabel(xylabels[0])
+        ax.set_xlabel(xylabels[1])
+        set_axis_style(ax, xticks, x_pos)
+
+    def plot_violin(self, fig, ax, data, title=None, legends=None, xticks=None, xlabel=None, bag_width=1.0):
+
+        ax.set_title(title)
+        ax.semilogy()
+        ax.grid()
+        n_vin = data.shape[-1]
+        colors_map = ['#E4DACE', '#E5BB4B', '#498EAF', '#631F16']
+        if len(data.shape) == 2:
+            positions = np.arange(n_vin) + 1
+            x_pos = None
+            n_bag = 1
+        else:
+            n_bag = data.shape[-2]
+            p = (np.linspace(0, 1, n_vin + 2) - 0.5) * bag_width
+            positions = np.hstack([p[1:-1] + 0.5 + i for i in range(n_bag)]) * n_vin
+            x_pos = np.arange(n_bag) * n_vin + n_vin / 2
+
+        parts = ax.violinplot(data.reshape(data.shape[0], -1), widths=0.5 * bag_width, positions=positions,
+                              showmeans=False, showmedians=False, showextrema=False)
+
+        for i in range(n_vin):
+            for j in range(n_bag):
+                parts['bodies'][i + j * n_vin].set_facecolor(colors_map[i%len(colors_map)])  # violin color
+                parts['bodies'][i + j * n_vin].set_edgecolor('grey')  # violin edge
+                parts['bodies'][i + j * n_vin].set_alpha(0.9)
+        ax.legend(legends)
+        quartile1, medians, quartile3 = np.percentile(data.reshape(data.shape[0], -1), [25, 50, 75], axis=0)
+        whiskers = np.array([
+            adjacent_values(sorted_array, q1, q3)
+            for sorted_array, q1, q3 in zip(data.reshape(data.shape[0], -1), quartile1, quartile3)])
+        whiskers_min, whiskers_max = whiskers[:, 0], whiskers[:, 1]
+
+        ax.scatter(positions, medians, marker='o', color='white', s=5, zorder=3)
+        ax.vlines(positions, quartile1, quartile3, color='black', linestyle='-', lw=5)
+        # ax.vlines(positions, whiskers_min, whiskers_max, color='black', linestyle='-', lw=1)
+        if xticks is None:
+            xticks = np.arange(n_vin * n_bag)
+        ax.set_xlabel(xlabel)
+        set_axis_style(ax, xticks, x_pos)
+
+    def plot_fields_1D(self, fig, axs, real, pred, coord=None,
+                      titles=None, xylabels=('x', 'field'), legends=None,
+                      show_channel=None, field_names=None):
+        r"""
+            plot the fields of real and pred
+            Args:
+                :param fig:
+                :param axs:
+                :param real:
+                :param pred:
+                :param coord:
+                :param titles:
+                :param xylabels:
+                :param legends:
+                :param show_channel:
+            :return:
+                None
+        """
+        real = tensor2numpy(real)
+        pred = tensor2numpy(pred)
+        coord = tensor2numpy(coord)
+
+        if len(axs.shape) == 1:
+            axs = axs[None, :]
+
+        if show_channel is None:
+            show_channel = np.arange(real.shape[-1])
+
+        if legends is None:
+            if pred is not None:
+                legends = ['true', 'pred', 'error']
+            else:
+                legends = ['true',]
+
+        if field_names is None:
+            field_names = []
+            for i in show_channel:
+                field_names.append('field ' + str(i + 1))
+
+        if coord is None:
+            coord = np.arange(real.shape[0])
+
+        for i in range(len(show_channel)):
+
+            fi = show_channel[i]
+
+            axs[i][0].cla()
+            if pred is None:
+                ff = [real[..., fi], ]
+                axs[i][0].plot(coord, ff[0], color='steelblue', linewidth=3, label=legends[0])
+            else:
+                ff = [real[..., fi], pred[..., fi], real[..., fi] - pred[..., fi]]
+                axs[i][0].plot(coord, ff[0], color='steelblue', linewidth=3, label=legends[0])
+                axs[i][0].plot(coord, ff[1], '*', color='firebrick', linewidth=10, label=legends[1])
+                axs[i][1].plot(coord, ff[2], color='forestgreen', linewidth=2, label=legends[2])
+
+            for j in range(axs.shape[1]):
+                axs[i][j].legend(loc="best")
+                axs[i][j].set_xlabel(xylabels[0])
+                axs[i][j].set_ylabel(xylabels[1])
+                axs[i][j].tick_params('both')
+                axs[i][j].set_title(titles[j])
+
+
     def plot_fields_2D(self, fig, axs, real, pred=None, coord=None,
                        edges=None, mask=None,
                        cmin_max=None, fmin_max=None,
@@ -125,6 +434,12 @@ class Visual(object):
         :param titles: the name of width: a list of string, ['truth', 'pred', 'error'] or ['truth', ]
         :return:
         '''
+
+        real = tensor2numpy(real)
+        pred = tensor2numpy(pred)
+        coord = tensor2numpy(coord)
+        edges = tensor2numpy(edges)
+        mask = tensor2numpy(mask)
 
         if len(real.shape) == 3:
             graph_flag = False
@@ -232,12 +547,16 @@ if __name__=='__main__':
     mask = np.array([[0, 0], [0, 0.5], [0.5, 0.5], [0.5, 0]])
     fig, axs = plt.subplots(1, 3)
     visual_model.plot_fields_2D(fig, axs, real, pred, coord, mask=mask, titles=['真实field', '预测field', '误差field'])
-    a = 1
     plt.show()  # fig.show();input();
+
+    fig, axs = plt.subplots(1, 2, num=2)
+    visual_model.plot_fields_1D(fig, axs, real, pred, titles=['预测field', '误差field'])
+    plt.show()  # fig.show();input();
+
 
     # airfoil reading from msh & random fields
     # import meshio
-    data_file = '../demo/cylinder2d+t/data/ns_unsteady.npy'
+    data_file = '../demo/cylinder_2d_t/data/ns_unsteady.npy'
     data = np.load(data_file, allow_pickle=True).item()
     u_ref = np.array(data["u"], dtype=np.float32)
     v_ref = np.array(data["v"], dtype=np.float32)
@@ -247,10 +566,11 @@ if __name__=='__main__':
 
     real = np.stack((p_ref[0], u_ref[0], v_ref[0]), axis=1)
     fig, axs = plt.subplots(3, 1)
-    visual_model.plot_fields_tr(fig, axs, real, None, coords, mask=cylinder_coords,
+    visual_model.plot_fields_2D(fig, axs, real, None, coords, mask=cylinder_coords,
                                 titles=['真实field', '预测field', '误差field'], field_names=['p', 'u', 'v'])
     a = 1
     plt.show()  # fig.show();input();
+
 
 
 

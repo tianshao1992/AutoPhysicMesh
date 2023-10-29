@@ -8,11 +8,13 @@
 # @Description    : ******
 """
 
-from Module import bkd, NNs
-from Module.activations import get as get_activation
+from Module import bkd, nn
+from Module.NNs.activations import get as get_activation
 
-class MlpBlock(NNs.Module):
-    def __init__(self, planes: list, active="gelu",
+class MlpBlock(nn.Module):
+    def __init__(self,
+                 planes: list or tuple,
+                 active="gelu",
                  last_active=False,
                  use_one_branch=True):
         # =============================================================================
@@ -26,18 +28,18 @@ class MlpBlock(NNs.Module):
         self.last_active = last_active
         self.use_one_branch = use_one_branch
 
-        self.layers = NNs.ModuleList()
+        self.layers = nn.ModuleList()
         if self.use_one_branch:
             for i in range(len(self.planes) - 1):
-                self.layers.append(NNs.Linear(self.planes[i], self.planes[i + 1]))
-            self.layers = NNs.Sequential(*self.layers)
+                self.layers.append(nn.Linear(self.planes[i], self.planes[i + 1]))
+            self.layers = nn.Sequential(*self.layers)
         else:
             for j in range(self.planes[-1]):
                 layer = []
                 for i in range(len(self.planes) - 2):
-                    layer.append(NNs.Linear(self.planes[i], self.planes[i + 1]))
-                layer.append(NNs.Linear(self.planes[-2], 1))
-                self.layers.append(NNs.Sequential(*layer))
+                    layer.append(nn.Linear(self.planes[i], self.planes[i + 1]))
+                layer.append(nn.Linear(self.planes[-2], 1))
+                self.layers.append(nn.Sequential(*layer))
 
         self.reset_parameters()
 
@@ -46,9 +48,9 @@ class MlpBlock(NNs.Module):
         weight initialize
         """
         for m in self.modules():
-            if isinstance(m, NNs.Linear):
+            if isinstance(m, nn.Linear):
                 # nn.init.xavier_normal_(m.weight, gain=1)
-                NNs.init.xavier_uniform_(m.weight, gain=1)
+                nn.init.xavier_uniform_(m.weight, gain=1)
                 m.bias.data.zero_()
 
     def forward(self, x, u=None):

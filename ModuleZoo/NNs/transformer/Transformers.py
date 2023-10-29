@@ -19,11 +19,14 @@ sys.path.append(os.path.join(file_path.split('transformer')[0]))
 sys.path.append(os.path.join(file_path.split('Models')[0]))
 
 # from utilize import *
+from Utilizes.commons import default, identity
 from basic.basic_layers import *
 from gnn.graph_layers import *
-from transformer.attention_layers import *
-from fno.spectral_layers import *
-from Utilizes.geometrics import *
+from ModuleZoo.NNs.transformer.attention_layers import *
+from ModuleZoo.NNs.fno.spectral_layers import SpectralConv1d, SpectralConv2d, SpectralConv3d
+
+from Module.NNs.activations import get as get_activations
+from Module import bkd, nn
 
 class SimpleTransformerEncoderLayer(nn.Module):
     """
@@ -47,7 +50,7 @@ class SimpleTransformerEncoderLayer(nn.Module):
                  diagonal_weight: float = 1e-2,
                  symmetric_init=False,
                  residual_type='add',
-                 activation_type='relu',
+                 layer_active='relu',
                  dropout=0.1,
                  ffn_dropout=None,
                  debug=False,
@@ -86,7 +89,7 @@ class SimpleTransformerEncoderLayer(nn.Module):
         self.ff = FeedForward(in_dim=d_model,
                               dim_feedforward=dim_feedforward,
                               batch_norm=batch_norm,
-                              activation=activation_type,
+                              layer_active=layer_active,
                               dropout=ffn_dropout,
                               )
         self.dropout1 = nn.Dropout(dropout)
@@ -262,35 +265,36 @@ class PointwiseRegressor(nn.Module):
     A wrapper for a simple pointwise linear layers
     '''
 
-    def __init__(self, in_dim,  # input dimension
+    def __init__(self,
+                 input_dim,  # input dimension
                  n_hidden,
-                 out_dim,  # number of target dim
+                 output_dim,  # number of target dim
                  num_layers: int = 2,
                  spacial_fc: bool = False,
                  spacial_dim=1,
                  dropout=0.1,
-                 activation='silu',
+                 layer_active='silu',
                  return_latent=False,
                  debug=False):
         super(PointwiseRegressor, self).__init__()
 
         dropout = default(dropout, 0.1)
         self.spacial_fc = spacial_fc
-        activ = activation_dict[activation]
+        layer_active = get_activations(layer_active)
         if self.spacial_fc:
-            in_dim = in_dim + spacial_dim
+            in_dim = input_dim + spacial_dim
             self.fc = nn.Linear(in_dim, n_hidden)
         self.ff = nn.ModuleList([nn.Sequential(
             nn.Linear(n_hidden, n_hidden),
-            activ,
+            layer_active,
         )])
         for _ in range(num_layers - 1):
             self.ff.append(nn.Sequential(
                 nn.Linear(n_hidden, n_hidden),
-                activ,
+                layer_active,
             ))
         self.dropout = nn.Dropout(dropout)
-        self.out = nn.Linear(n_hidden, out_dim)
+        self.out = nn.Linear(n_hidden, output_dim)
         self.return_latent = return_latent
         self.debug = debug
 
@@ -304,7 +308,7 @@ class PointwiseRegressor(nn.Module):
             Output: (-1, n, n_targets)
         '''
         if self.spacial_fc:
-            x = torch.cat([x, grid], dim=-1)
+            x = bkd.cat([x, grid], dim=-1)
             x = self.fc(x)
 
         for layer in self.ff:
@@ -329,10 +333,11 @@ class SpectralRegressor(nn.Module):
     n_hidden: number of hidden features out from attention to the fourier conv
     '''
 
-    def __init__(self, in_dim,
+    def __init__(self,
+                 input_dim,
                  n_hidden,
                  freq_dim,
-                 out_dim,
+                 output_dim,
                  modes: int,
                  num_spectral_layers: int = 2,
                  n_grid=None,
@@ -342,8 +347,8 @@ class SpectralRegressor(nn.Module):
                  return_freq=False,
                  return_latent=False,
                  normalizer=None,
-                 activation='silu',
-                 last_activation=True,
+                 layer_active='silu',
+                 last_active=True,
                  dropout=0.1,
                  debug=False):
         super(SpectralRegressor, self).__init__()
@@ -356,32 +361,32 @@ class SpectralRegressor(nn.Module):
         else:
             raise NotImplementedError("3D not implemented.")
         # activation = default(activation, 'silu')
-        self.activation = activation_dict[activation]
+        self.layer_active = get_activations(layer_active)
         dropout = default(dropout, 0.1)
         self.spacial_fc = spacial_fc  # False in Transformer
         if self.spacial_fc:
-            self.fc = nn.Linear(in_dim + spacial_dim, n_hidden)
+            self.fc = nn.Linear(input_dim + spacial_dim, n_hidden)
 
         self.spectral_conv = nn.ModuleList([spectral_conv(in_dim=n_hidden,
                                                           out_dim=freq_dim,
                                                           modes=modes,
                                                           dropout=dropout,
-                                                          activation=activation)])
+                                                          activation=layer_active)])
         for _ in range(num_spectral_layers - 1):
             self.spectral_conv.append(spectral_conv(in_dim=freq_dim,
                                                     out_dim=freq_dim,
                                                     modes=modes,
                                                     dropout=dropout,
                                                     activation=activation))
-        if not last_activation:
-            self.spectral_conv[-1].activation = Identity()
+        if not last_active:
+            self.spectral_conv[-1].layer_active = identity()
 
         self.n_grid = n_grid  # dummy for debug
         self.dim_feedforward = default(dim_feedforward, 2 * spacial_dim * freq_dim)
         self.regressor = nn.Sequential(
             nn.Linear(freq_dim, self.dim_feedforward),
             self.activation,
-            nn.Linear(self.dim_feedforward, out_dim),
+            nn.Linear(self.dim_feedforward, output_dim),
         )
         self.normalizer = normalizer
         self.return_freq = return_freq
@@ -519,7 +524,7 @@ class SimpleAttnRegressor(nn.Module):
                  return_weight=False,
                  return_latent=False,
                  normalizer=None,
-                 activation='silu',
+                 layer_active='silu',
                  dropout=0.1,
                  debug=False):
         super(SimpleAttnRegressor, self).__init__()
@@ -540,10 +545,10 @@ class SimpleAttnRegressor(nn.Module):
                                            norm_eps=None,
                                            batch_norm=False,
                                            attn_weight=False,
-                                           activation_type=activation,
+                                           layer_active=layer_active,
                                            dropout=dropout,
                                            ffn_dropout=None))
-        self.activation = activation_dict[activation]
+        self.activation = get_activations(layer_active)
         self.normalizer = normalizer
         self.return_weight = return_weight
         self.return_latent = return_latent
@@ -975,7 +980,7 @@ class FourierTransformer(nn.Module):
         y = y.view(bsz, n_grid, n_grid)
         x = x[:, ::downsample, ::downsample].contiguous()
         y = y[:, ::downsample, ::downsample].contiguous()
-        return torch.stack([x, y], dim=-1)
+        return bkd.stack([x, y], dim=-1)
 
     def _get_setting(self):
         all_attr = list(self.config.keys()) + additional_attr
@@ -1109,7 +1114,7 @@ class FourierTransformer(nn.Module):
 
 if __name__ == '__main__':
     for graph in ['gcn', 'gat']:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        device = bkd.device('cuda' if bkd.cuda.is_available() else 'cpu')
         config = defaultdict(lambda: None,
                              node_feats=1,
                              edge_feats=5,

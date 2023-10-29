@@ -12,20 +12,39 @@ import logging
 from tabulate import tabulate
 
 
-def get_log_keys(log_dict):
-    key_list = []
-    for key in log_dict.keys():
-        if key.endswith("_loss_values"):
-            key_list.append(key)
-        elif key.endswith("_metric_values"):
-            key_list.append(key)
-        elif key.endswith("_learning_rates"):
-            key_list.append(key)
-    return key_list
+HEADER_KEYWORDS = ["name", "step", "epoch"]
+VALUES_KEYWORDS = ["_time", "_learning_rates", "_key_params", "_loss_values", "_metric_values"]
 
+def get_print_keywords(print_dict):
+    r"""
+        get print keywords
+        Args:
+            :param print_dict: dict
+        :return: list
+    """
+    head_key_list, value_key_list = [], []
+    for key in print_dict.keys():
+        for item in HEADER_KEYWORDS:
+            if key.endswith(item):
+                head_key_list.append(key)
+                break
+        for item in VALUES_KEYWORDS:
+            if key.endswith(item):
+                value_key_list.append(key)
+                break
+    return head_key_list, value_key_list
 
-class Logger:
-    def __init__(self, name: str = "main"):
+class Printer(object):
+    def __init__(self,
+                 config: dict,
+                 name: str = "main"):
+        r"""
+            class to print info
+            Args:
+                :param config: dict
+                :param name: str
+        """
+
         self.logger = logging.getLogger(name)
         self.logger.handlers.clear()
         formatter = logging.Formatter(
@@ -42,17 +61,17 @@ class Logger:
     def info(self, message):
         self.logger.info(message)
 
-    def log_print(self, step, start_time, end_time, log_dict):
-        log_keys = get_log_keys(log_dict)
+    def print_info(self, start_time, end_time, print_dict):
 
-        log_list = [[key, "{:.3e}".format(log_dict[key])] for key in log_keys]
+        header_keys, values_keys = get_print_keywords(print_dict)
+
+        header_list = [str(key) + ": {}".format(print_dict[key]) for key in header_keys]
+
+        values_list = [[key, "{:.3e}".format(print_dict[key])] for key in values_keys]
 
         message = tabulate(
-            log_list,
-            headers=[
-                "Epoch : {:3d}".format(step),
-                "Time  : {:.3f}".format(end_time - start_time),
-            ],
+            tabular_data=values_list,
+            headers=header_list,
             tablefmt="simple",
             numalign="right",
             disable_numparse=True,

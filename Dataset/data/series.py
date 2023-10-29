@@ -15,7 +15,7 @@ from scipy.io import loadmat, savemat
 import numpy as np
 import pandas as pd
 
-from Dataset.data._base_data import BasicData
+from Dataset.data._base import BasicData
 
 class SeriesData(BasicData):
     def __init__(self,
@@ -140,6 +140,17 @@ class SeriesData(BasicData):
 
         return time_index
 
+    def get_differential(self, order: int = 1, freq: Union[int, str] = None):
+        r"""
+            get differential
+            :param order: order of differential
+            :param freq: frequency
+            :return: differential
+        """
+        if freq is None:
+            freq = self.freq
+        return self.data.diff(periods=order, axis=0) / freq ** order
+
     def visual_matplot(self, idx: int):
 
         return NotImplementedError("visual_matplot not implemented yet!")
@@ -150,9 +161,8 @@ if __name__ == "__main__":
 
 
     # use a real mesh class to test
-    series = SeriesData('../demo/lzjy1d_t/data/raw_data.csv', freq='1s')
+    series = SeriesData('../../demo/lzjy_0d+t/data/raw_data.csv', freq='10s')
 
     import matplotlib.pyplot as plt
-    plt.plot(outlet_dataset.mesh_points[:, 0], outlet_dataset.mesh_points[:, 1],
-                c=outlet_dataset.mesh_fields[:, 0], cmap='jet')
+    plt.plot(series.data.index, series.data.loc[:, 'TT1工艺气体温度实际值'])
     plt.show()

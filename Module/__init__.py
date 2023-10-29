@@ -11,5 +11,12 @@
 import torch
 import torch.nn as nn
 bkd = torch
+from Module.NNs import activations, lossfuncs, autograd, optimizers
+from Module.SLs import odesolvers, pdesolvers, optimsolvers, symsolvers, matsolvers
+from Module.metrics import Metric
 
-__all__ = ['activations', 'lossfuncs', 'autograd', 'bkd', 'nn']
+
+__all__ = ['bkd', 'nn',
+           'activations', 'lossfuncs', 'autograd', 'optimizers',
+           'optimsolvers', 'odesolvers', 'pdesolvers', 'symsolvers', 'matsolvers'
+           'Metric']
