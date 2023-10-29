@@ -2,20 +2,21 @@
 # -*- coding: utf-8 -*-
 """
 # @Copyright (c) 2023 Baidu.com, Inc. All Rights Reserved
-# @Time    : 2023/10/15 1:30
+# @Time    : 2023/09/15 1:30
 # @Author  : Liu Tianyuan (liutianyuan02@baidu.com)
-# @File    : MeshLoader.py
+# @File    : meshdata.py
 # @Description    : ******
 """
 
-import meshio
 import os
 import gmsh
-import pygmsh
-class MeshLoader(meshio.Mesh):
+import meshio
+import numpy as np
+
+class MeshData(meshio.Mesh):
     def __init__(self, file):
-        mesh_model = self.loadfile(file)
-        super(MeshLoader, self).__init__(
+        mesh_model = self.load_file(file)
+        super(MeshData, self).__init__(
                 points=mesh_model.points,
                 cells=mesh_model.cells,
                 point_data=mesh_model.point_data,
@@ -26,9 +27,18 @@ class MeshLoader(meshio.Mesh):
                 gmsh_periodic=mesh_model.gmsh_periodic,
                 info=mesh_model.info,
         )
+        self.point_sets = self.get_point_sets()
+        # todo: add cell_sets
+        # todo: add field_sets
+        self.field_sets = self.point_sets
 
         pass
-    def loadfile(self, file):
+    def load_file(self, file):
+        r"""
+            load mesh file
+            :param file:
+            :return:
+        """
         assert os.path.exists(file), 'file not found: ' + file
         try:
             mesh = meshio.read(file)
@@ -45,10 +55,37 @@ class MeshLoader(meshio.Mesh):
         # self.mesh_model = mesh
         return mesh
 
-    def get_point_sets(self, name: str):
-        assert name in self.cell_sets_dict.keys(), 'cell set not found: ' + name
-        points_sets = []
-        for key in self.cell_sets_dict[name]:
-            index = self.cell_sets_dict[name][key]
-            points_sets.append(self.points[index])
-        return points_sets
+    def save_file(self, file, file_type='msh'):
+        r"""
+            save mesh file
+            Args:
+                :param file: file path
+                :param file_type: 'msh', 'vtk', 'xdmf', 'xdmf3', 'stl', 'ply', 'obj', 'off', 'mesh', 'med', 'h5m', 'vtu'
+            Return:
+                None
+        """
+        meshio.write(file, self, file_format=file_type)
+
+
+    def get_point_sets(self, ):
+        r"""
+            get point sets
+            :return: point sets
+        """
+        point_sets = {}
+        for field_name in self.field_data.keys():
+            point_index = []
+            for cell_type, cell_index in self.cell_sets_dict[field_name].items():
+                cell_set = self.cells_dict[cell_type][cell_index]
+                point_index.extend(cell_set.flatten())
+
+            points = self.points[np.unique(np.array(point_index, dtype=np.int32)), :]
+            # # plot fields data
+            # if not os.path.exists('mesh_plots'):
+            #     os.mkdir('mesh_plots')
+            # fig = plt.figure(1)
+            # plt.scatter(points[:, 0], points[:, 1], s=0.5)
+            # fig.savefig(os.path.join('mesh_plots', field_name + '.jpg'))
+
+            point_sets.update({field_name: points})
+        return point_sets
