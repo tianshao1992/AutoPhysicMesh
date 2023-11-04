@@ -118,6 +118,11 @@ class NetFitter(BasicModule):
                 batch = train_loaders.batch_preprocess(batch)
                 self.train_step(epoch, batch)
 
+            # note: scheduler step should be after one epoch not one batch
+            self.scheduler.step()
+
+            self.adapt_loss_weights(epoch)
+
             if epoch % self.config.Logging.log_every_steps == 0:
                 self.models.eval()
                 # train_batch logger
@@ -135,9 +140,6 @@ class NetFitter(BasicModule):
                 log_evaluator.step(epoch, self.state_dict, valid_batch, time_sta, time_end)
                 time_sta = time.time()
 
-            # note: scheduler step should be after one epoch not one batch
-            self.scheduler.step()
-
             # todo: support early stopping and best model saving
             if epoch % self.config.Saving.save_every_steps == 0:
                 self.save_model(os.path.join(self.config.Saving.save_path, 'models.pth'))
@@ -153,17 +155,6 @@ class NetFitter(BasicModule):
         """
         self.optimizer.zero_grad()
         batch_dict = self.losses(batch)
-        # Update weights if necessary
-        try:
-            if epoch % self.config.Training.Weighting.update_every_steps == 0:
-                self.loss_weights, self.adapt_dict = (
-                    update_loss_weights(self.loss_weights,
-                                        batch_dict,
-                                        models=self.models,
-                                        scheme=self.config.Training.Weighting.scheme,
-                                        momentum=self.config.Training.Weighting.momentum))
-        except:
-            Warning("the loss weights are not updated!")
 
         total_loss = get_total_loss(batch_dict, self.loss_weights)
         total_loss.backward()
@@ -172,7 +163,21 @@ class NetFitter(BasicModule):
         # todo: update loss_dict for each batch like metrics_dict
         self.loss_dict = batch_dict
 
-        return total_loss.item()
+    def adapt_loss_weights(self, epoch):
+
+        # Update weights if necessary
+        try:
+            if epoch % self.config.Training.Weighting.update_every_steps == 0:
+                self.loss_weights, self.adapt_dict = (
+                    update_loss_weights(self.loss_weights,
+                                        self.loss_dict,
+                                        models=self.models,
+                                        scheme=self.config.Training.Weighting.scheme,
+                                        pred_batch=None,  # todo: the scheme ntk need this args
+                                        momentum=self.config.Training.Weighting.momentum))
+        except:
+            Warning("the loss weights are not updated!")
+
 
     def config_setup(self, config):
 

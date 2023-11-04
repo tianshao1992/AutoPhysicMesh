@@ -38,6 +38,11 @@ class PinnSolver(NetFitter):
                 batch = train_loaders.batch_preprocess(batch)
                 self.train_step(epoch, batch)
 
+            # note: scheduler step should be after one epoch not one batch
+            self.scheduler.step()
+
+            self.adapt_loss_weights(epoch)
+
             if epoch % self.config.Logging.log_every_steps == 0:
                 # no need for train batch validation in pinns
                 # time_end = time.time()
@@ -45,7 +50,6 @@ class PinnSolver(NetFitter):
                 # log_evaluator.step(epoch, self.state_dict, batch, time_sta, time_end)
 
                 self.models.eval()
-
                 # valid_batch logger
                 valid_batch = self.valid(valid_loaders)
                 self.update_states()
@@ -53,8 +57,6 @@ class PinnSolver(NetFitter):
                 log_evaluator.step(epoch, self.state_dict, valid_batch, time_sta, time_end)
                 time_sta = time.time()
 
-            # note: scheduler step should be after one epoch not one batch
-            self.scheduler.step()
 
             # todo: support early stopping and best model saving
             if epoch % self.config.Saving.save_every_steps == 0:
