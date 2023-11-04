@@ -17,13 +17,13 @@ from Module import bkd, nn
 from ModuleZoo.NNs.mlp.MLPs import FourierEmbedding, PeriodsEmbedding, MlpNet
 from Module.FusionModule import PinnSolver, PinnEvaluator
 from Module.NNs.autograd import gradient
-from Module.NNs.lossfuncs import get as get_loss
 from Module.NNs.weightning import casual_loss_weights
 from Utilizes.commons import fig2data
 
 class NavierStokes2DSolver(PinnSolver):
     def __init__(self, config, ):
         # super(NavierStokes2D, self).__init__()
+
         transforms = []
         if config.Network.periods_emb is not None:
             transforms.append(PeriodsEmbedding(**config.Network.periods_emb))
@@ -47,39 +47,6 @@ class NavierStokes2DSolver(PinnSolver):
 
         super(NavierStokes2DSolver, self).__init__(config, models=net_model)
 
-
-    def forward(self, inn_var):
-        out_var = self.input_transform(inn_var)
-        out_var = self.models(out_var)
-        return out_var
-
-
-    def residual(self, inn_var, out_var=None):
-
-        if out_var is None:
-            out_var = self.forward(inn_var)
-
-        u = out_var[..., (0,)]
-        v = out_var[..., (1,)]
-
-        duda = gradient(u, inn_var)
-        dvda = gradient(v, inn_var)
-
-        dudx, dudy = duda[..., (0,)], duda[..., (1,)]
-        dvdx, dvdy = dvda[..., (0,)], dvda[..., (1,)]
-
-        w = dvdx - dudy
-        dwda = gradient(w, inn_var)
-        dwdx, dwdy, dwdt = dwda[..., (0,)], dwda[..., (1,)], dwda[..., (2,)],
-
-        d2wdx2 = gradient(dwdx, inn_var)[..., (0,)]
-        d2wdy2 = gradient(dwdy, inn_var)[..., (1,)]
-
-        # PDE residual
-        res_m = dwdt + u * dwdx + v * dwdy - (d2wdx2+d2wdy2) * self.nu
-        res_c = dudx + dvdy
-
-        return bkd.cat((res_m, res_c), dim=-1)
 
     def losses(self, batch):
 
@@ -123,8 +90,7 @@ class NavierStokes2DSolver(PinnSolver):
 
         return self.loss_dict
 
-
-    def valid(self, batch):
+    def infer(self, batch):
 
         valid_batch = batch["all"]
         # residual loss
@@ -144,6 +110,38 @@ class NavierStokes2DSolver(PinnSolver):
 
         return batch
 
+    def forward(self, inn_var):
+        out_var = self.input_transform(inn_var)
+        out_var = self.models(out_var)
+        return out_var
+
+
+    def residual(self, inn_var, out_var=None):
+
+        if out_var is None:
+            out_var = self.forward(inn_var)
+
+        u = out_var[..., (0,)]
+        v = out_var[..., (1,)]
+
+        duda = gradient(u, inn_var)
+        dvda = gradient(v, inn_var)
+
+        dudx, dudy = duda[..., (0,)], duda[..., (1,)]
+        dvdx, dvdy = dvda[..., (0,)], dvda[..., (1,)]
+
+        w = dvdx - dudy
+        dwda = gradient(w, inn_var)
+        dwdx, dwdy, dwdt = dwda[..., (0,)], dwda[..., (1,)], dwda[..., (2,)],
+
+        d2wdx2 = gradient(dwdx, inn_var)[..., (0,)]
+        d2wdy2 = gradient(dwdy, inn_var)[..., (1,)]
+
+        # PDE residual
+        res_m = dwdt + u * dwdx + v * dwdy - (d2wdx2+d2wdy2) * self.nu
+        res_c = dudx + dvdy
+
+        return bkd.cat((res_m, res_c), dim=-1)
 
     def input_transform(self, inn_var):
         x = inn_var[..., (0,)]
@@ -203,7 +201,7 @@ class NavierStokes2DEvaluator(PinnEvaluator):
 
 if __name__ == "__main__":
 
-    from all_config import get_config
+    from config.default import get_config
     config = get_config()
     pinns = NavierStokes2DSolver(config)
     x = bkd.ones([100, 50, 2]).to(config.network.device)

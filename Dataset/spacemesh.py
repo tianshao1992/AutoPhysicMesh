@@ -128,7 +128,7 @@ class SpaceMeshDataSet(BasicDataset, Dataset):
             Returns:
                 None
         """
-        mesh = self.raw_data.load_file(file)
+        mesh = MeshData(file)
         return mesh
 
     def save_file(self, file, file_type='msh'):

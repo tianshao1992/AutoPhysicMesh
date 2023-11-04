@@ -37,7 +37,7 @@ class SeriesData(BasicData):
         else:
             raise NotImplementedError("the data type is not supported!")
 
-        self._data = _data
+        self._raw = _data
         self.data = self.load_dataframe(_data, freq, time_col, value_cols, *args, **kwargs)
         self.freq = freq
 

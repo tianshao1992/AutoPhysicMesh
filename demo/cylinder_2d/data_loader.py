@@ -100,7 +100,7 @@ def get_dataloader(all_config):
 
 
 if __name__ == "__main__":
-    from all_config import get_config
+    from demo.cylinder_2d.config.default import get_config
 
     all_config = get_config()
     data_loaders = get_dataloader(all_config)

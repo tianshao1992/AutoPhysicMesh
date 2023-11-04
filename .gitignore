@@ -131,15 +131,14 @@ venv*/
 venv/
 .idea
 .idea/
-data/
+**/work/
+**/wandb/
+**/data/
 */work/
 */*/work/
-*/*/work*/
 */*/data/
-*/*/data*/
 */wandb/
-*/wandb*/
-/demo/wandb/
+*/*/wandb/
 *.npz
 *.npy
 *.mat
@@ -182,8 +181,6 @@ output/
 # hydra
 logs/
 debug/
-./demo/*/wandb/
-*.wandb
 
 # draw.io
 ~$*

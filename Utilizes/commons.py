@@ -7,6 +7,7 @@
 # @File    : commons.py
 # @Description    : ******
 """
+import os
 import numpy as np
 import PIL.Image as Image
 
@@ -45,3 +46,14 @@ def fig2data(fig):
     image = Image.frombytes("RGBA", (w, h), buf.tobytes())
     image = np.asarray(image)
     return image
+
+def get_filelist(dir, suffix=None):
+    Filelist = []
+    for home, dirs, files in os.walk(dir):
+        for filename in files:
+            # 文件名列表，包含完整路径
+            if filename.endswith(suffix):
+                Filelist.append(os.path.join(home, filename))
+            # # 文件名列表，只包含文件名
+            # Filelist.append( filename)
+    return Filelist

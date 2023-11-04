@@ -13,7 +13,7 @@ from tabulate import tabulate
 
 
 HEADER_KEYWORDS = ["name", "step", "epoch"]
-VALUES_KEYWORDS = ["_time", "_learning_rates", "_key_params", "_loss_values", "_metric_values"]
+VALUES_KEYWORDS = ["_time", "_learning_rates", "_params_values", "_loss_values", "_metric_values"]
 
 def get_print_keywords(print_dict):
     r"""
@@ -66,8 +66,13 @@ class Printer(object):
         header_keys, values_keys = get_print_keywords(print_dict)
 
         header_list = [str(key) + ": {}".format(print_dict[key]) for key in header_keys]
-
-        values_list = [[key, "{:.3e}".format(print_dict[key])] for key in values_keys]
+        # values_list = [[key, "{}".format(print_dict[key])] for key in values_keys]
+        values_list = []
+        for key in values_keys:
+            try:
+                values_list.append([key, "{:.3e}".format(print_dict[key])])
+            except:
+                values_list.append([key, "{}".format(print_dict[key])])
 
         message = tabulate(
             tabular_data=values_list,

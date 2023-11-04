@@ -10,6 +10,7 @@
 
 import os
 import time
+# import warnings
 from abc import abstractmethod
 from ml_collections import ConfigDict
 from typing import Union, List, Dict, Tuple, Callable, Optional
@@ -18,7 +19,8 @@ from Module import bkd, nn, NNs
 from Module._base import BasicModule, BaseEvaluator
 from Module.NNs.optimizers import get as get_optimizer
 from Module.NNs.lossfuncs import get as get_loss_func
-from Module.NNs.weightning import initial_loss_weights, update_loss_weights, get_total_loss
+from Module.NNs.weightning import update_loss_weights, get_total_loss
+from Metrics.MetricSystem import MetricsManager
 
 Type_net_model = Union[dict, list, tuple, nn.ModuleDict, nn.ModuleList, nn.Module]
 
@@ -26,7 +28,7 @@ class NetFitter(BasicModule):
     def __init__(self,
                  config: ConfigDict,
                  models: Type_net_model,
-                 params: ConfigDict = {},
+                 params: tuple = (),
                  *args,
                  **kwargs):
         r"""
@@ -45,25 +47,59 @@ class NetFitter(BasicModule):
         else:
             net_model = models
         models = net_model.to(config.Device)
+
         super(NetFitter, self).__init__(config=config, models=models, params=params)
         self.config_setup(config)
 
-
     @abstractmethod
     def losses(self, batch, *args, **kwargs):
+        r"""
+            calculate training losses for the model.
+            Args:
+                :param batch:
+            Return
+                loss_dict
+        """
+        return NotImplementedError("Subclasses should implement this!")
+
+    @abstractmethod
+    def metrics(self, batch, *args, **kwargs):
+        r"""
+            calculate valid metrics for the model.
+            Args:
+                :param batch:
+            Return
+                metric_dict
+        """
         # pass
+
         return NotImplementedError("Subclasses should implement this!")
 
     @abstractmethod
     def infer(self, batch):
+        r"""
+            infer the model.
+            Args:
+                :param batch:
+            Return
+                batch
+        """
         # pass
         return NotImplementedError("Subclasses should implement this!")
 
-    @abstractmethod
-    def valid(self, batch):
-        # pass
-        return NotImplementedError("Subclasses should implement this!")
+    def valid(self, data_loaders, *args, **kwargs):
+        self.metric_evals.clear()
+        for batch in data_loaders:
+            batch = data_loaders.batch_preprocess(batch)
+            batch = self.valid_step(batch)
+            batch = data_loaders.batch_postprocess(batch)
+            batch_dict = self.metrics(batch)
+            self.metric_dict = self.metric_evals.batch_update(batch_dict)
+        return batch
 
+    def valid_step(self, batch):
+        batch = self.infer(batch)
+        return batch
 
     def train(self, train_loaders, valid_loaders, log_evaluator, *args, **kwargs):
         r"""
@@ -76,7 +112,7 @@ class NetFitter(BasicModule):
             :return:
         """
         time_sta = time.time()
-        for epoch in range(1, self.config.Training.max_epoch+1):
+        for epoch in range(1, self.config.Training.max_epoch + 1):
             self.models.train()
             for batch in train_loaders:
                 batch = train_loaders.batch_preprocess(batch)
@@ -86,19 +122,13 @@ class NetFitter(BasicModule):
                 self.models.eval()
                 # train_batch logger
                 time_end = time.time()
-                train_batch = next(iter(train_loaders))
-                train_batch = train_loaders.batch_preprocess(train_batch)
-                train_batch = self.valid(train_batch)
-                train_batch = train_loaders.batch_postprocess(train_batch)
+                train_batch = self.valid(train_loaders)
                 self.update_states(prefix_name='train')
                 log_evaluator.step(epoch, self.state_dict, train_batch, time_sta, time_end)
 
                 # valid_batch logger
                 time_sta = time.time()
-                valid_batch = next(iter(valid_loaders))
-                valid_batch = valid_loaders.batch_preprocess(valid_batch)
-                valid_batch = self.valid(valid_batch)
-                valid_batch = valid_loaders.batch_postprocess(valid_batch)
+                valid_batch = self.valid(valid_loaders)
                 self.update_states(prefix_name='valid')
                 time_end = time.time()
 
@@ -122,56 +152,96 @@ class NetFitter(BasicModule):
             :return:
         """
         self.optimizer.zero_grad()
-        self.losses(batch)
+        batch_dict = self.losses(batch)
         # Update weights if necessary
-        if epoch % self.config.Training.Weighting.update_every_steps == 0:
-            self.loss_weights, self.adapt_dict = (
-                update_loss_weights(self.loss_weights,
-                                    self.loss_dict,
-                                    models=self.models,
-                                    scheme=self.config.Training.Weighting.scheme,
-                                    momentum=self.config.Training.Weighting.momentum))
-        total_loss = get_total_loss(self.loss_dict, self.loss_weights)
+        try:
+            if epoch % self.config.Training.Weighting.update_every_steps == 0:
+                self.loss_weights, self.adapt_dict = (
+                    update_loss_weights(self.loss_weights,
+                                        batch_dict,
+                                        models=self.models,
+                                        scheme=self.config.Training.Weighting.scheme,
+                                        momentum=self.config.Training.Weighting.momentum))
+        except:
+            Warning("the loss weights are not updated!")
+
+        total_loss = get_total_loss(batch_dict, self.loss_weights)
         total_loss.backward()
         self.optimizer.step()
         self.total_loss = total_loss.item()
+        # todo: update loss_dict for each batch like metrics_dict
+        self.loss_dict = batch_dict
 
         return total_loss.item()
 
-
     def config_setup(self, config):
 
-        self.models.to(config.Device)
-        self.register_states()
-        self.register_params()
+        # self.models.to(config.Device)
+        # self.register_states()
+        # self.register_params(params)
+        self.set_params()
         self.set_optimizer()
         self.set_loss_funcs()
+        self.set_metric_evals()
         # self.callbacks = CallbackList(callbacks=callbacks)
 
     def save_model(self, path):
-        save_path = path # os.path.join(os.path.split(os.path.abspath(path))[0], path)
+        save_path = path  # os.path.join(os.path.split(os.path.abspath(path))[0], path)
         # if not os.path.exists(save_path):
         #     os.makedirs(save_path)
         bkd.save(
             {'config': self.config,
-                  'models': self.models,
-                  'loss_funcs': self.loss_funcs,
-                  'optimizer': self.optimizer,
-                  'scheduler': self.scheduler,
-                  'params': self.params},
-                   save_path)
+             'models': self.models,
+             'params': self.params,
+             'loss_funcs': self.loss_funcs,
+             'metric_evals': self.metric_evals,
+             'optimizer': self.optimizer,
+             'scheduler': self.scheduler,
+             },
+            save_path)
 
     def load_model(self, path):
+        r"""
+            load model
+            Args:
+                :param path: file path
+        """
         checkpoint = bkd.load(path, map_location=self.config.Device)
-        self.config = checkpoint['config']
-        self.models = checkpoint['models']
-        self.params = checkpoint['parmas']
-        self.optimizer = checkpoint['optimizer']
-        self.scheduler = checkpoint['scheduler']
-        self.loss_funcs = checkpoint['loss_funcs']
+
+        try:
+            self.config = checkpoint['config']
+        except:
+            raise ValueError("the config is not correct!")
+        try:
+            self.models = checkpoint['models']
+        except:
+            Warning("the models are not loaded!")
+        try:
+            self.params = checkpoint['params']
+        except:
+            Warning("the params are not loaded!")
+
+        try:
+            self.optimizer = checkpoint['optimizer']
+        except:
+            Warning("the optimizer are not loaded!")
+        try:
+            self.scheduler = checkpoint['scheduler']
+        except:
+            Warning("the scheduler are not loaded!")
+
+        try:
+            self.loss_funcs = checkpoint['loss_funcs']
+        except:
+            Warning("the loss_funcs are not loaded!")
+
+        try:
+            self.metric_evals = checkpoint['metric_evals']
+        except:
+            Warning("the metrics are not loaded!")
 
     def set_optimizer(self, network_params=None):
-
+        assert 'Optim' in self.config, "No Optim config found, the Optimizer are not defined in the config!"
         if network_params is None:
             network_params = self.models.parameters()
 
@@ -181,27 +251,28 @@ class NetFitter(BasicModule):
             self.scheduler = {}
             for task in self.config.Optim.task_names:
                 if task not in self.config.Optim.optimizer.keys():
-                   raise ValueError("the task name {} is not in the optimizer config!".format(task))
+                    raise ValueError("the task name {} is not in the optimizer config!".format(task))
                 else:
                     try:
                         self.optimizer[task] = get_optimizer(self.config.Optim.optimizer[task].name,
-                                                              params=network_params,
-                                                              **self.config.Optim.optimizer[task].params)
+                                                             params=network_params,
+                                                             **self.config.Optim.optimizer[task].params)
                         self.scheduler[task] = get_optimizer(self.config.Optim.scheduler[task].name,
-                                                              optimizer=self.optimizer[task],
-                                                              **self.config.Optim.scheduler[task].params)
+                                                             optimizer=self.optimizer[task],
+                                                             **self.config.Optim.scheduler[task].params)
                     except:
                         raise ValueError("the optimizers or scheduler config is not correct!")
         else:
+            # whether to use the same optimizer and scheduler for all the tasks
             self.optimizer = get_optimizer(self.config.Optim.optimizer.name,
-                                            params=network_params,
-                                            **self.config.Optim.optimizer.params)
+                                           params=network_params,
+                                           **self.config.Optim.optimizer.params)
             self.scheduler = get_optimizer(self.config.Optim.scheduler.name,
-                                            optimizer=self.optimizer,
-                                            **self.config.Optim.scheduler.params)
+                                           optimizer=self.optimizer,
+                                           **self.config.Optim.scheduler.params)
 
     def set_loss_funcs(self):
-
+        assert 'Loss' in self.config, "No Loss config found, the loss_functions are not defined in the config!"
         if 'task_names' in self.config.Loss.keys():
             self.loss_funcs = {}
             for task in self.config.Loss.task_names:
@@ -211,16 +282,18 @@ class NetFitter(BasicModule):
                     try:
                         if 'params' in self.config.Loss[task].keys():
                             params = self.config.Loss[task].params
-                        else:   # if the loss has no params
+                        else:  # if the loss has no params
                             params = {}
                         self.loss_funcs[task] = get_loss_func(self.config.Loss[task].name, **params)
                     except:
                         raise ValueError("the loss config is not correct!")
 
         else:
+            # whether to use the same optimizer and scheduler for all the tasks
+
             if 'params' in self.config.Loss.keys():
                 params = self.config.Loss.params
-            else:   # if the loss has no params
+            else:  # if the loss has no params
                 params = {}
             self.loss_funcs = get_loss_func(self.config.Loss.name, **params)
 
@@ -234,16 +307,49 @@ class NetFitter(BasicModule):
             self.loss_weights = None
             self.total_loss = None
 
+    def set_metric_evals(self):
+        # set metrics for the model.
+        assert 'Metrics' in self.config, "No Metrics config found, the Metrics will not be calculated!"
+        self.metric_evals = MetricsManager(self.config.Metrics)
+        self.metric_dict = {}
 
-    def update_states(self, prefix_name):
+    def set_params(self):
+        # set the value of the param to the models
+        for key, param in self.params.constant.items():
+            # todo: support multi types of params
+            # note that parameter names are unique.
+            self.models.register_buffer(name=key, tensor=bkd.tensor(param.data, dtype=bkd.float32))
+
+        for key, param in self.params.variable.items():
+            # todo: support multi types of params
+            # if key in self.models.get_parameter_names():
+            #     warnings.WarningMessage("the param {} is already in the models, ")
+            # self.models.__setattr__(key, bkd.tensor(param.data, dtype=bkd.float32))
+            # note that parameter names are unique.
+            param_nn = nn.Parameter(bkd.tensor(param.data, dtype=bkd.float32))
+            self.models.register_parameter(name=key, param=param_nn)
+
+    def update_params(self):
+        # get the value of the param from the model
+        # note: the constant params are not updated
+        for key, value in self.params.variable.items():
+            self.params.variable[key].data = self.models.__getattr__(key).data.detach().cpu().numpy()
+        return self.params
+
+    def update_states(self, prefix_name: str = ''):
         """
         register_states for the model.
         """
-        self.state_dict.prefix_name = prefix_name
+        self.update_params()
+        self.state_dict.params_variable = self.params.variable
+        self.state_dict.params_constant = self.params.constant
+
+        self.state_dict.prefix_name = prefix_name + '-' if prefix_name != '' else ''
         self.state_dict.time = time.time()
         self.state_dict.mode = self.config.Mode
         self.state_dict.device = self.config.Device
         self.state_dict.loss_dict = self.loss_dict
+        self.state_dict.metric_dict = self.metric_dict
         self.state_dict.loss_weights = self.loss_weights
         self.state_dict.total_loss = self.total_loss
         self.state_dict.adapt_dict = self.adapt_dict
@@ -257,20 +363,19 @@ class NetFitterEvaluator(BaseEvaluator):
 
         super(NetFitterEvaluator, self).__init__(config, board)
 
-
     def log_losses(self, state, batch, *args, **kwargs):
         losses = state.loss_dict
         prefix = state.prefix_name
         for key, values in losses.items():
-            self.log_dict[prefix + "_" + key + "_loss_values"] = values
-        self.log_dict[prefix + "_" + "total_loss_values"] = state.total_loss
+            self.log_dict[prefix + key + "_loss_values"] = values
+        self.log_dict[prefix + "total_loss_values"] = state.total_loss
 
     def log_weights(self, state, batch, *args, **kwargs):
         loss_weights = state.loss_weights
         prefix = state.prefix_name
         if loss_weights is not None:
             for key, values in loss_weights.items():
-                self.log_dict[prefix + "_" + key + "_loss_weights"] = values
+                self.log_dict[prefix + key + "_loss_weights"] = values
 
     def log_lrs(self, state, batch, *args, **kwargs):
         lrs = state.learning_rates
@@ -281,7 +386,24 @@ class NetFitterEvaluator(BaseEvaluator):
         adapt_dict = state.adapt_dict
         prefix = state.prefix_name
         for key, values in adapt_dict.items():
-            self.log_dict[prefix + "_" + key + "_adapt_dict"] = values
+            self.log_dict[prefix + key + "_adapt_dict"] = values
+
+    def log_metrics(self, state, batch, *args, **kwargs):
+        metric_dict = state.metric_dict
+        prefix = state.prefix_name
+        for key, values in metric_dict.items():
+            # note: to ensure the metric values to upload to the visual board is a scalar
+            # todo: support metrics upload to the board as a vector to visual
+            self.log_dict[prefix + key + "_metric_values"] = values.mean()
+
+    def log_params(self, state, batch, *args, **kwargs):
+        # todo: add necessary params to the log_dict, not all the params
+        params_variable = state.params_variable
+        params_constant = state.params_constant
+        for key, values in params_variable.items():
+            self.log_dict[key + "_params_values"] = values.data
+        for key, values in params_constant.items():
+            self.log_dict[key + "_params_values"] = values.data
 
     def step(self, epoch, state, batch, start_time, end_time, *args, **kwargs):
         self.log_dict = {}

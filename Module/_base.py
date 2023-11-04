@@ -13,7 +13,8 @@ from abc import abstractmethod
 from typing import Union, List, Dict, Tuple, Callable, Optional
 from ml_collections import ConfigDict
 from Logger import Printer, Visual
-from Module import Metric
+from Metrics import MetricsManager
+from Dataset.data.params import ParamsData
 from Utilizes.commons import default
 
 class BasicModule(object):
@@ -21,26 +22,28 @@ class BasicModule(object):
     def __init__(self,
                  config: ConfigDict,
                  models: object,
-                 params: ConfigDict,
+                 params: Tuple[ParamsData] = (),
                  *args,
                  **kwargs):
 
         self.config = config
-        self._params = params
         self.models = models
-        self.register_params()
+        self.register_params(params)
         self.register_states()
 
-
-
-    def register_params(self):
+    def register_params(self, params):
         r"""
             register_params to generate self.params
         """
         self.params = ConfigDict()
-        for key in self._params.keys():
-            self.params.update({key:
-                                default(self._params[key], 0.0)})
+        self.params.variable = ConfigDict()
+        self.params.constant = ConfigDict()
+        for param in params:
+            for name in param.names:
+                if getattr(param, name).mode == 'variable':
+                    self.params.variable[name] = getattr(param, name)
+                elif getattr(param, name).mode == 'constant':
+                    self.params.constant[name] = getattr(param, name)
 
     def register_states(self):
         """
@@ -133,6 +136,18 @@ class BasicModule(object):
         update logger for the model.
         """
         self.state_dict.update(states)
+
+    def set_params(self):
+        """
+        set params for the model.
+        """
+        pass
+
+    def get_params(self):
+        """
+        get params for the model.
+        """
+        pass
 
     def register_callbacks(self, callbacks):
         self.callbacks = callbacks
@@ -256,8 +271,8 @@ class BaseEvaluator(object):
 
         self.config = config
         self.board = board
-        self.visual = Visual(use_tex='ch-en')
-        self.metric = Metric(config)
+        self.visual = Visual(config)
+        self.metric = MetricsManager(config.Metrics)
         self.printer = Printer(config)
         self.log_step = {}
 

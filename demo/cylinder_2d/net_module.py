@@ -8,16 +8,15 @@
 # @Description    : ******
 """
 import os
-import wandb
 import matplotlib.pyplot as plt
 
 from Module import bkd
 from ModuleZoo.NNs.mlp.MLPs import FourierEmbedding, MlpNet
 from Module.FusionModule import PinnSolver, PinnEvaluator
 from Module.NNs.autograd import gradient
-from Module.NNs.lossfuncs import get as get_loss
 from Utilizes.commons import fig2data
-loss_func = get_loss('mse')
+from Utilizes.geometric import ccw_sort
+
 
 class NavierStokes2DSolver(PinnSolver):
     def __init__(self, config, ):
@@ -28,7 +27,117 @@ class NavierStokes2DSolver(PinnSolver):
         net_model = MlpNet(**config.Network)
 
         super(NavierStokes2DSolver, self).__init__(config, models=net_model)
-        # self.config_setup(config)
+
+        # Non-dimensionalized domain length and width
+        self.L, self.W, self.T = config.physics.L, config.physics.W, config.physics.T
+        self.Re = config.physics.Re  # Reynolds number
+        self.U_star = config.physics.U_star
+        self.L_star = config.physics.L_star
+
+    def losses(self, batch):
+
+        loss_dict = {}
+        inflow_batch = batch["inflow"]
+        outflow_batch = batch["outflow"]
+        wall_batch = batch["wall"]
+        cylinder_batch = batch["cylinder"]
+        res_batch = batch["res"]
+
+        # residual loss
+        res_input = res_batch['input'].to(self.config.Device)
+        res_input.requires_grad_(True)
+        res_pred = self.forward(inn_var=res_input)
+        res_pred, _ = self.residual(inn_var=res_input, out_var=res_pred)
+        res_loss_x = self.loss_funcs(res_pred[..., (0,)], 0)
+        res_loss_y = self.loss_funcs(res_pred[..., (1,)], 0)
+        res_loss_c = self.loss_funcs(res_pred[..., (2,)], 0)
+
+        # inflow loss
+        inflow_input, inflow_true = (inflow_batch['input'].to(self.config.Device),
+                                     inflow_batch['target'].to(self.config.Device))
+        inflow_pred = self.forward(inn_var=inflow_input)
+        inflow_loss_u = self.loss_funcs(inflow_pred[..., (1,)], inflow_true[..., (1,)])
+        inflow_loss_v = self.loss_funcs(inflow_pred[..., (2,)], 0)
+
+        # outflow loss
+        outflow_input = outflow_batch['input'].to(self.config.Device)
+        outflow_input.requires_grad_(True)
+        outflow_pred = self.forward(inn_var=outflow_input)
+        _, outflow_res = self.residual(outflow_input, outflow_pred)
+        outflow_loss_u = self.loss_funcs(outflow_res[..., (0,)], 0)
+        outflow_loss_v = self.loss_funcs(outflow_res[..., (1,)], 0)
+
+        # wall loss
+        wall_input = wall_batch['input'].to(self.config.Device)
+        wall_pred = self.forward(inn_var=wall_input)
+        wall_loss_u = self.loss_funcs(wall_pred[..., (1,)], 0)
+        wall_loss_v = self.loss_funcs(wall_pred[..., (2,)], 0)
+
+        # wall loss
+        cylinder_input = cylinder_batch['input'].to(self.config.Device)
+        cylinder_pred = self.forward(inn_var=cylinder_input)
+        cylinder_loss_u = self.loss_funcs(cylinder_pred[..., (1,)], 0)
+        cylinder_loss_v = self.loss_funcs(cylinder_pred[..., (2,)], 0)
+
+
+        loss_dict.update({
+            "u_in": inflow_loss_u,
+            "v_in": inflow_loss_v,
+            "u_out": outflow_loss_u,
+            "v_out": outflow_loss_v,
+            "u_wall": wall_loss_u,
+            "v_wall": wall_loss_v,
+            "u_cylinder": cylinder_loss_u,
+            "v_cylinder": cylinder_loss_v,
+            "r_x": res_loss_x,
+            "r_y": res_loss_y,
+            "r_c": res_loss_c,
+        })
+
+        return loss_dict
+
+    def infer(self, batch):
+
+        valid_batch = batch["all"]
+        # residual loss
+        res_input = valid_batch['input'].to(self.config.Device)
+        res_input.requires_grad_(True)
+        res_pred = self.forward(inn_var=res_input)
+        res_residual, _ = self.residual(inn_var=res_input, out_var=res_pred)
+
+        batch["all"].update({"pred": res_pred.detach().cpu(),
+                             "residual": res_residual.detach().cpu()})
+
+        inflow_batch = batch["inflow"]
+        # residual loss
+        inflow_input = inflow_batch['input'].to(self.config.Device)
+        inflow_pred = self.forward(inn_var=inflow_input)
+        batch["inflow"].update({"pred": inflow_pred.detach().cpu()})
+
+        return batch
+
+
+    def metrics(self, batch, *args, **kwargs):
+
+        metric_dict = {}
+        valid_batch = batch["all"]
+        residual = valid_batch['residual'][None]
+        pred = valid_batch['pred'][None]
+        true = valid_batch['target'][None]
+
+        # residual metric
+        residual_metric = self.metric_evals.metric_funcs['residual'](residual, 0)
+
+        # fields metric
+        fields_metric = self.metric_evals.metric_funcs['fields'](pred, true)
+
+        metric_dict.update({
+            "residual": residual_metric,
+            "fields": fields_metric,
+        })
+
+        return metric_dict
+
 
     def forward(self, inn_var):
         out_var = self.input_transform(inn_var)
@@ -69,97 +178,6 @@ class NavierStokes2DSolver(PinnSolver):
 
         return bkd.cat((res_x, res_y, res_c), dim=-1), bkd.cat((u_out, v_out), dim=-1)
 
-    def losses(self, batch):
-
-        inflow_batch = batch["inflow"]
-        outflow_batch = batch["outflow"]
-        wall_batch = batch["wall"]
-        cylinder_batch = batch["cylinder"]
-        res_batch = batch["res"]
-
-        # residual loss
-        res_input = res_batch['input'].to(self.config.Device)
-        res_input.requires_grad_(True)
-        res_pred = self.forward(inn_var=res_input)
-        res_pred, _ = self.residual(inn_var=res_input, out_var=res_pred)
-        res_loss_x = loss_func(res_pred[..., (0,)], 0)
-        res_loss_y = loss_func(res_pred[..., (1,)], 0)
-        res_loss_c = loss_func(res_pred[..., (2,)], 0)
-
-        # inflow loss
-        inflow_input, inflow_true = (inflow_batch['input'].to(self.config.Device),
-                                     inflow_batch['target'].to(self.config.Device))
-        inflow_pred = self.forward(inn_var=inflow_input)
-        inflow_loss_u = loss_func(inflow_pred[..., (1,)], inflow_true[..., (1,)])
-        inflow_loss_v = loss_func(inflow_pred[..., (2,)], 0)
-
-        # outflow loss
-        outflow_input = outflow_batch['input'].to(self.config.Device)
-        outflow_input.requires_grad_(True)
-        outflow_pred = self.forward(inn_var=outflow_input)
-        _, outflow_res = self.residual(outflow_input, outflow_pred)
-        outflow_loss_u = loss_func(outflow_res[..., (0,)], 0)
-        outflow_loss_v = loss_func(outflow_res[..., (1,)], 0)
-
-        # wall loss
-        wall_input = wall_batch['input'].to(self.config.Device)
-        wall_pred = self.forward(inn_var=wall_input)
-        wall_loss_u = loss_func(wall_pred[..., (1,)], 0)
-        wall_loss_v = loss_func(wall_pred[..., (2,)], 0)
-
-        # wall loss
-        cylinder_input = cylinder_batch['input'].to(self.config.Device)
-        cylinder_pred = self.forward(inn_var=cylinder_input)
-        cylinder_loss_u = loss_func(cylinder_pred[..., (1,)], 0)
-        cylinder_loss_v = loss_func(cylinder_pred[..., (2,)], 0)
-
-
-        self.loss_dict.update({
-            "u_in": inflow_loss_u,
-            "v_in": inflow_loss_v,
-            "u_out": outflow_loss_u,
-            "v_out": outflow_loss_v,
-            "u_wall": wall_loss_u,
-            "v_wall": wall_loss_v,
-            "u_cylinder": cylinder_loss_u,
-            "v_cylinder": cylinder_loss_v,
-            "r_x": res_loss_x,
-            "r_y": res_loss_y,
-            "r_c": res_loss_c,
-        })
-
-        return self.loss_dict
-
-    def config_setup(self, config):
-        super().config_setup(config)
-        # Non-dimensionalized domain length and width
-        self.L, self.W, self.T = config.physics.L, config.physics.W, config.physics.T
-        self.Re = config.physics.Re  # Reynolds number
-
-        self.U_star = config.physics.U_star
-        self.L_star = config.physics.L_star
-
-    def valid(self, batch):
-
-        valid_batch = batch["all"]
-        # residual loss
-        res_input = valid_batch['input'].to(self.config.Device)
-        res_input.requires_grad_(True)
-        res_pred = self.forward(inn_var=res_input)
-        res_residual, _ = self.residual(inn_var=res_input, out_var=res_pred)
-
-        batch["all"].update({"pred": res_pred.detach().cpu().numpy(),
-                             "residual": res_residual.detach().cpu().numpy()})
-
-        inflow_batch = batch["inflow"]
-        # residual loss
-        inflow_input = inflow_batch['input'].to(self.config.Device)
-        inflow_pred = self.forward(inn_var=inflow_input)
-        batch["inflow"].update({"pred": inflow_pred.detach().cpu().numpy()})
-
-        return batch
-
-
     def input_transform(self, inn_var):
         x = inn_var[..., (0,)] / self.L
         y = inn_var[..., (1,)] / self.W
@@ -183,27 +201,30 @@ class NavierStokes2DEvaluator(PinnEvaluator):
         residual = batch['all']['residual']
 
         cylinder = batch['cylinder']['input']
+        cylinder = ccw_sort(cylinder)
 
         # draw the predicted fields
         fig, axs = plt.subplots(3, 3, num=100, figsize=(20, 8))
         self.visual.plot_fields_2D(fig, axs, real, pred, coords,
                                    titles=['真实', '预测', '误差'], field_names=['p', 'u', 'v'],
+                                   mask=cylinder,
                                    cmaps=['jet', 'jet', 'coolwarm'])
         if isinstance(save_fig, str):
             fig.savefig(os.path.join(self.visual.save_path, save_fig + ".jpg"))
         plt.close(fig)
-        self.log_dict.update({'Predicted fields': wandb.Image(fig2data(fig))})
+        self.log_dict.update({'Predicted fields': self.board.Image(fig2data(fig))})
 
         # draw the pde residual loss
         fig, axs = plt.subplots(3, 1, num=101, figsize=(8, 8))
         self.visual.plot_fields_2D(fig, axs, residual, None, coords,
                                    titles=['残差',], field_names=['x动量', 'y动量', '连续性'],
+                                   mask=cylinder,
                                    cmaps=['jet', 'jet', 'coolwarm'])
 
         if isinstance(save_fig, str):
             fig.savefig(os.path.join(self.visual.save_path, save_fig + "_residuals.jpg"))
 
-        self.log_dict.update({'Predicted residual': wandb.Image(fig2data(fig))})
+        self.log_dict.update({'Predicted residual': self.board.Image(fig2data(fig))})
         plt.close(fig)
 
         real = batch['inflow']['target']
@@ -220,14 +241,14 @@ class NavierStokes2DEvaluator(PinnEvaluator):
         if isinstance(save_fig, str):
             fig.savefig(os.path.join(self.visual.save_path, save_fig + "_inflow.jpg"))
 
-        self.log_dict.update({'Inflow fields': wandb.Image(fig2data(fig))})
+        self.log_dict.update({'Inflow fields': self.board.Image(fig2data(fig))})
         plt.close(fig)
 
 
 
 if __name__ == "__main__":
 
-    from all_config import get_config
+    from demo.cylinder_2d.config.default import get_config
     config = get_config()
     pinn_cyl = NavierStokes2DSolver(config)
     x = bkd.ones([100, 50, 2]).to(config.network.device)

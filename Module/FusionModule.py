@@ -19,6 +19,7 @@ from Module.DataModule import NetFitter, NetFitterEvaluator
 
 Type_net_model = Union[dict, list, tuple, nn.ModuleDict, nn.ModuleList, nn.Module]
 
+
 class PinnSolver(NetFitter):
     def __init__(self,
                  config: ConfigDict,
@@ -28,25 +29,10 @@ class PinnSolver(NetFitter):
 
         super(PinnSolver, self).__init__(config=config, models=models, params=params)
 
-    @abstractmethod
-    def forward(self, inn_var, *args, **kwargs):
-        # pass
-        return NotImplementedError("Subclasses should implement this!")
-
-    @abstractmethod
-    def residual(self, batch, *args, **kwargs):
-        # pass
-        return NotImplementedError("Subclasses should implement this!")
-
-    @abstractmethod
-    def losses(self, batch, *args, **kwargs):
-        # pass
-        return NotImplementedError("Subclasses should implement this!")
-
     def train(self, train_loaders, valid_loaders, log_evaluator):
 
         time_sta = time.time()
-        for epoch in range(1, self.config.Training.max_epoch+1):
+        for epoch in range(1, self.config.Training.max_epoch + 1):
             self.models.train()
             for batch in train_loaders:
                 batch = train_loaders.batch_preprocess(batch)
@@ -59,11 +45,10 @@ class PinnSolver(NetFitter):
                 # log_evaluator.step(epoch, self.state_dict, batch, time_sta, time_end)
 
                 self.models.eval()
-                valid_batch = next(iter(valid_loaders))
-                valid_batch = valid_loaders.batch_preprocess(valid_batch)
-                valid_batch = self.valid(valid_batch)
-                valid_batch = valid_loaders.batch_postprocess(valid_batch)
-                self.update_states(prefix_name='valid')
+
+                # valid_batch logger
+                valid_batch = self.valid(valid_loaders)
+                self.update_states()
                 time_end = time.time()
                 log_evaluator.step(epoch, self.state_dict, valid_batch, time_sta, time_end)
                 time_sta = time.time()
@@ -80,5 +65,4 @@ class PinnEvaluator(NetFitterEvaluator):
     def __init__(self,
                  config: ConfigDict,
                  board):
-
         super(PinnEvaluator, self).__init__(config, board)

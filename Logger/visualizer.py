@@ -26,6 +26,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from Module.utils import tensor2numpy
 
+
 def adjacent_values(vals, q1, q3):
     """
     生成四分点，plot_violin
@@ -36,6 +37,7 @@ def adjacent_values(vals, q1, q3):
     lower_adjacent_value = q1 - (q3 - q1) * 1.5
     lower_adjacent_value = np.clip(lower_adjacent_value, vals[0], q1)
     return lower_adjacent_value, upper_adjacent_value
+
 
 def set_axis_style(ax, labels, position=None):
     """
@@ -58,6 +60,7 @@ class Visual(object):
     """
 
     def __init__(self,
+                 config,
                  save_path='./work/visuals',
                  use_tex='ch-en',
                  font_size=12,
@@ -69,7 +72,6 @@ class Visual(object):
         self.save_path = save_path
         if not os.path.exists(save_path):
             os.makedirs(save_path)
-
 
     def _setup(self):
         config = {
@@ -127,10 +129,7 @@ class Visual(object):
             # }
             # rcParams.update(pgf_config)
 
-
             rcParams.update(config)
-
-
 
     def plot_scatter(self, fig, axs, x, y,
                      title=None, axis_log=(False, False), xylabels=('x', 'y')):
@@ -201,8 +200,8 @@ class Visual(object):
         axs.scatter(true, pred, marker='.', color='firebrick', linewidth=2.0)
         axs.plot([min_value, max_value], [min_value, max_value], '-', color='steelblue', linewidth=5.0)
         # 在两个曲线之间填充颜色
-        axs.fill_between([min_value, max_value], [(1-error_ratio) * min_value, (1-error_ratio) * max_value],
-                         [((1+error_ratio)) * min_value, ((1+error_ratio)) * max_value],
+        axs.fill_between([min_value, max_value], [(1 - error_ratio) * min_value, (1 - error_ratio) * max_value],
+                         [((1 + error_ratio)) * min_value, ((1 + error_ratio)) * max_value],
                          alpha=0.2, color='steelblue')
 
         if axis_log[0]:
@@ -217,8 +216,7 @@ class Visual(object):
         axs.set_ylabel(xylabels[1])
         axs.tick_params('both')
         axs.set_title(title)
-        axs.legend(['真实-预测', 'y=x', '±{:.2f}%'.format(error_ratio*100)])
-
+        axs.legend(['真实-预测', 'y=x', '±{:.2f}%'.format(error_ratio * 100)])
 
     def plot_error(self, fig, axs, error, error_ratio=0.05, title=None, rel_error=False,
                    xylabels=('predicted error / %', 'distribution density')):
@@ -226,7 +224,7 @@ class Visual(object):
         # ax.bar(np.arange(len(error)), error*100, )
 
         if rel_error:
-            error = pd.DataFrame(error) * 100 # 转换格式
+            error = pd.DataFrame(error) * 100  # 转换格式
             acc = (np.abs(np.array(error)) < error_ratio * 100).sum() / error.shape[0]
         else:
             error = pd.DataFrame(error)
@@ -274,8 +272,7 @@ class Visual(object):
                 None
         """
 
-
-        #绘制箱形图
+        # 绘制箱形图
         ax.set_title(title)
         ax.semilogy()
         ax.grid()
@@ -298,7 +295,7 @@ class Visual(object):
 
         for i in range(n_vin):
             for j in range(n_bag):
-                parts['boxes'][i + j * n_vin].set_facecolor(colors_map[i%len(colors_map)])  # violin color
+                parts['boxes'][i + j * n_vin].set_facecolor(colors_map[i % len(colors_map)])  # violin color
                 parts['boxes'][i + j * n_vin].set_edgecolor('grey')  # violin edge
                 parts['boxes'][i + j * n_vin].set_alpha(0.9)
         if legends is not None:
@@ -331,7 +328,7 @@ class Visual(object):
 
         for i in range(n_vin):
             for j in range(n_bag):
-                parts['bodies'][i + j * n_vin].set_facecolor(colors_map[i%len(colors_map)])  # violin color
+                parts['bodies'][i + j * n_vin].set_facecolor(colors_map[i % len(colors_map)])  # violin color
                 parts['bodies'][i + j * n_vin].set_edgecolor('grey')  # violin edge
                 parts['bodies'][i + j * n_vin].set_alpha(0.9)
         ax.legend(legends)
@@ -350,8 +347,8 @@ class Visual(object):
         set_axis_style(ax, xticks, x_pos)
 
     def plot_fields_1D(self, fig, axs, real, pred, coord=None,
-                      titles=None, xylabels=('x', 'field'), legends=None,
-                      show_channel=None, field_names=None):
+                       titles=None, xylabels=('x', 'field'), legends=None,
+                       show_channel=None, field_names=None):
         r"""
             plot the fields of real and pred
             Args:
@@ -381,7 +378,7 @@ class Visual(object):
             if pred is not None:
                 legends = ['true', 'pred', 'error']
             else:
-                legends = ['true',]
+                legends = ['true', ]
 
         if field_names is None:
             field_names = []
@@ -405,15 +402,15 @@ class Visual(object):
                 axs[i][0].plot(coord, ff[1], '*', color='firebrick', linewidth=10, label=legends[1])
                 axs[i][1].plot(coord, ff[2], color='forestgreen', linewidth=2, label=legends[2])
 
-            for j in range(axs.shape[1]):
+            for j in range(len(titles)):
                 axs[i][j].legend(loc="best")
                 axs[i][j].set_xlabel(xylabels[0])
                 axs[i][j].set_ylabel(xylabels[1])
                 axs[i][j].tick_params('both')
                 axs[i][j].set_title(titles[j])
 
-
-    def plot_fields_2D(self, fig, axs, real, pred=None, coord=None,
+    def plot_fields_2D(self, fig, axs,
+                       real, pred=None, coord=None,
                        edges=None, mask=None,
                        cmin_max=None, fmin_max=None,
                        show_channel=None, field_names=None, cmaps=None, titles=None):
@@ -456,9 +453,9 @@ class Visual(object):
             show_channel = np.arange(real.shape[-1])
 
         if field_names is None:
-            field_names= []
+            field_names = []
             for i in show_channel:
-                field_names.append('field ' + str(i+1))
+                field_names.append('field ' + str(i + 1))
 
         if fmin_max is None:
             faxis = tuple(range(len(real.shape) - 1))
@@ -467,7 +464,7 @@ class Visual(object):
             fmin, fmax = fmin_max[0], fmin_max[1]
 
         if cmin_max is None:
-            caxis = tuple(range(len(coord.shape)-1))
+            caxis = tuple(range(len(coord.shape) - 1))
             cmin, cmax = coord.min(axis=caxis), coord.max(axis=caxis)
         else:
             cmin, cmax = cmin_max[0], cmin_max[1]
@@ -481,7 +478,6 @@ class Visual(object):
         if graph_flag and edges is None:
             triang = tri.Triangulation(coord[:, 0], coord[:, 1])
             edges = triang.edges
-
 
         x_pos = coord[..., 0]
         y_pos = coord[..., 1]
@@ -533,9 +529,69 @@ class Visual(object):
                 axs[i][j].set_xlabel('x')
                 axs[i][j].set_ylabel('y')
 
+    def output_tecplot(self,
+                       file,
+                       real,
+                       pred,
+                       coord,
+                       edges=None,
+                       field_names=None,
+                       zone_name='Zone'):
+
+        real = tensor2numpy(real)
+        pred = tensor2numpy(pred)
+        coord = tensor2numpy(coord)
+        edges = tensor2numpy(edges)
+
+        name_real = ['True_' + name for name in field_names]
+        name_pred = ['Pred_' + name for name in field_names]
+        name_err = ['Err_' + name for name in field_names]
+        spatial_dim = coord.shape[-1]
+
+        if pred is None:
+            output = np.concatenate((coord, real), axis=-1)
+        else:
+            output = np.concatenate((coord, real, pred, pred - real), axis=-1)
+
+        df = pd.DataFrame(output.reshape(-1, output.shape[-1]))
+
+        f = open(file, "w")
+        f.write("%s\n" % ('TITLE = "Element Data"'))
+        if spatial_dim == 1:
+            f.write("%s" % ('VARIABLES = "X",'))
+        elif spatial_dim == 2:
+            f.write("%s" % ('VARIABLES = "X","Y",'))
+        else:
+            f.write("%s" % ('VARIABLES = "X","Y","Z",'))
+
+        for i in range(len(name_real)):
+            f.write("%s" % ('"' + name_real[i] + '",'))
+
+        if pred is not None:
+            for i in range(len(name_pred)):
+                f.write("%s" % ('"' + name_pred[i] + '",'))
+            for i in range(len(name_err)):
+                f.write("%s" % ('"' + name_err[i] + '",'))
+
+        if edges is None:
+            f.write("\n%s" % ('ZONE T="' + zone_name + '", '))
+            if len(coord.shape) == 2:
+                f.write("%s" % ('I=' + str(coord.shape[0])))
+            elif len(coord.shape) == 3:
+                f.write("%s" % ('I=' + str(coord.shape[1]) + ', J=' + str(coord.shape[0])))
+            else:
+                f.write(
+                    "%s" % ('I=' + str(coord.shape[0]) + ', J=' + str(coord.shape[1]) + ', K=' + str(coord.shape[2])))
+            f.write("%s\n" % (', F=POINT'))
+            f.close()
+        else:
+            # todo: add the unstructured mesh
+            return NotImplementedError("The unstructured mesh is not implemented now!")
+
+        df.to_csv(file, index=False, mode='a', float_format="%20.5e", sep=",", header=False)
 
 
-if __name__=='__main__':
+if __name__ == '__main__':
     visual_model = Visual(use_tex='ch-en')
 
     # random data
@@ -553,7 +609,6 @@ if __name__=='__main__':
     visual_model.plot_fields_1D(fig, axs, real, pred, titles=['预测field', '误差field'])
     plt.show()  # fig.show();input();
 
-
     # airfoil reading from msh & random fields
     # import meshio
     data_file = '../demo/cylinder_2d_t/data/ns_unsteady.npy'
@@ -570,9 +625,3 @@ if __name__=='__main__':
                                 titles=['真实field', '预测field', '误差field'], field_names=['p', 'u', 'v'])
     a = 1
     plt.show()  # fig.show();input();
-
-
-
-
-
-

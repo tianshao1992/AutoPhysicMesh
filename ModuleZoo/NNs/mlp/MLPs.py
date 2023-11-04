@@ -26,7 +26,6 @@ class FourierEmbedding(nn.Module):
         self.linear = nn.Linear(hidden_dim * 2 * self.modes, output_dim)
         self.register_buffer(name='modes_harmonic', tensor=bkd.arange(0, self.modes, 1))
 
-
     def forward(self, x):
         bsz = list(x.shape[:-1])
         h = bkd.matmul(x, self.fourier_weight)
@@ -35,6 +34,7 @@ class FourierEmbedding(nn.Module):
                      bkd.sin(h * self.modes_harmonic)), dim=-1).view(bsz + [self.hidden_dim * 2 * self.modes])
         y = self.linear(h)
         return y
+
 
 class PeriodsEmbedding(nn.Module):
 
@@ -53,10 +53,10 @@ class PeriodsEmbedding(nn.Module):
             assert len(scale) == len(self.axis), "the scale length should be equal to axis"
             self.register_buffer(name='scale', tensor=bkd.tensor(scale, dtype=bkd.float32))
         else:
-            self.register_buffer(name='scale', tensor=bkd.tensor([scale]*len(self.axis), dtype=bkd.float32))
+            self.register_buffer(name='scale', tensor=bkd.tensor([scale] * len(self.axis), dtype=bkd.float32))
 
         if trainable:
-            self.scale = nn.Parameter(self.scale * bkd.ones((len(self.axis), ), dtype=bkd.float32))
+            self.scale = nn.Parameter(self.scale * bkd.ones((len(self.axis),), dtype=bkd.float32))
 
         self.linear = nn.Linear(len(self.axis) * 2 + len(self.non_axis), output_dim)
 
@@ -99,12 +99,12 @@ class MlpNet(nn.Module):
         self.output_transform = output_transform
         self.use_one_branch = use_one_branch
 
-        if input_transform is None or len(input_transform) == 0:
+        if input_transform is None:
             self.input_transform = MlpBlock(planes=[self.input_dim, self.layer_width],
                                             active=layer_active, last_active=True)
 
         if modified_mode:
-            self.modified_transform = MlpBlock(planes=[self.layer_width, self.layer_width*2],
+            self.modified_transform = MlpBlock(planes=[self.layer_width, self.layer_width * 2],
                                                active=layer_active, last_active=True)
 
         self.MlpBlock = MlpBlock(planes=[layer_width, ] * layer_depth + [output_dim, ],
@@ -127,7 +127,6 @@ class MlpNet(nn.Module):
         return y
 
 
-
 if __name__ == "__main__":
     model = MlpBlock([3, 64, 64, 3], active="gelu", last_active=False, use_one_branch=True)
     print(model)
@@ -141,19 +140,17 @@ if __name__ == "__main__":
     y = model(x)
     print(y.shape)
 
-
     model = FourierEmbedding(input_dim=3, hidden_dim=16, output_dim=64, modes=10)
     x = bkd.ones([100, 50, 3])
     y = model(x)
     print(y.shape)
-
 
     model = MlpNet(input_dim=3,
                    output_dim=2,
                    layer_depth=5,
                    layer_width=64,
                    layer_active='gelu',
-                   modified_mode=True,)
+                   modified_mode=True, )
     #
     x = bkd.ones([100, 50, 3])
     y = model(x)
@@ -171,7 +168,6 @@ if __name__ == "__main__":
     y = model(x)
     print(y.shape)
 
-
     model = PeriodsEmbedding(input_dim=3, output_dim=64, axis=(0, 1), scale=1.0, trainable=True)
     x = bkd.ones([100, 50, 3])
     y = model(x)
@@ -179,4 +175,5 @@ if __name__ == "__main__":
 
     l1 = model
     l2 = FourierEmbedding(input_dim=64, hidden_dim=16, output_dim=64, modes=10, scale=1.0)
-    print(l2(l1(x)).shape)
+    input_transforms = nn.Sequential(*[l1, l2])
+    print(input_transforms(x).shape)

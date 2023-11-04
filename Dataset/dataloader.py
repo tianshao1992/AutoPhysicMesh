@@ -37,7 +37,7 @@ class DataLoadersManager(MultiDataLoader):
     def __init__(self,
                  datasets,
                  batch_sizes,
-                 random_seed: int = 2023,
+                 random_seed: int,
                  shuffle: bool = True,
                  input_transforms=None,
                  output_transforms=None,

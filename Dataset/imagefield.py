@@ -37,8 +37,13 @@ class ImageFieldDataSet(BasicDataset, Dataset):
         self.check_data(self.raw_data)
 
     def __getitem__(self, idx):
-        return {'input': self.input_data[idx],
-                'target': self.output_data[idx] if self.output_data is not None else None}
+        r"""
+            get the item of the dataset
+        """
+        data_dict = {'input': self.input_data[idx]}
+        if self.output_data is not None:
+            data_dict['target'] = self.output_data[idx]
+        return data_dict
 
     def load_file(self, file):
         r"""

@@ -8,7 +8,7 @@
 # @Description    : ******
 """
 import wandb
-from all_config import get_config
+from demo.cylinder_2d.config.default import get_config
 from data_loader import get_dataloader
 from net_module import NavierStokes2DSolver, NavierStokes2DEvaluator
 

@@ -11,10 +11,14 @@
 from Module import bkd
 import numpy as np
 
+
 def tensor2numpy(obj):
     """
-    :param obj:
+    convert bkd tensor to numpy.ndarray
+    Args:
+        obj:
     :return:
+        obj: numpy.ndarray
     """
     if bkd.is_tensor(obj):
         obj = obj.cpu().numpy()
