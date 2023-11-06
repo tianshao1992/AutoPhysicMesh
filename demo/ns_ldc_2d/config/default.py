@@ -21,7 +21,7 @@ def get_config():
 
     # Physics
     config.physics = physics = ml_collections.ConfigDict()
-    physics.Re = 3200 # [100, 400, 1000, 3200]
+    physics.Re = 1000 # [100, 400, 1000, 3200]
 
     # Weights & Biases
     config.Board = Board = ml_collections.ConfigDict()
@@ -59,7 +59,7 @@ def get_config():
     Optim.scheduler.name = "StepLR"
     Optim.scheduler.params = ml_collections.ConfigDict()
     Optim.scheduler.params.gamma = 0.9
-    Optim.scheduler.params.step_size = 2000
+    Optim.scheduler.params.step_size = 5000
 
     # keywords: Loss
     config.Loss = Loss = ml_collections.ConfigDict()
@@ -89,7 +89,7 @@ def get_config():
 
     # keywords: Training
     config.Training = Training = ml_collections.ConfigDict()
-    Training.max_epoch = 50000
+    Training.max_epoch = 200000
     Training.bcs_batch_size = 4
     Training.res_batch_size = 64
     Training.valid_batch_size = 1
@@ -105,7 +105,7 @@ def get_config():
         "r_c": 1.0,
     }
     Weighting.momentum = 0.9
-    Weighting.update_every_steps = 1000  # 100 for grad norm and 1000 for ntk
+    Weighting.update_every_steps = 2000  # 100 for grad norm and 1000 for ntk
 
     # Logging
     config.Logging = Logging = ml_collections.ConfigDict()

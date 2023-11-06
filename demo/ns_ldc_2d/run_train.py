@@ -20,4 +20,6 @@ board_config = all_config.Board
 wandb.init(project=board_config.project, name=board_config.name, dir=board_config.dir)
 evaluator = NavierStokes2DEvaluator(all_config, board=wandb)
 
+netsolver.load_model('./work/models_1000.pth')
+netsolver.config_setup()
 netsolver.train(train_loaders, valid_loaders, evaluator)

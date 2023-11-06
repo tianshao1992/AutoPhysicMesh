@@ -173,7 +173,7 @@ class NavierStokes2DEvaluator(PinnEvaluator):
 
 
         fig, axs = plt.subplots(3, 2, num=100, figsize=(8, 8))
-        self.visual.plot_fields_1D(fig, axs, real[220, :], pred[220, :], coords[128, :, 0],
+        self.visual.plot_fields_1D(fig, axs, real[120, :], pred[120, :], coords[120, :, 0],
                                    titles=['真实', '误差'], xylabels=('y', 'fields'),
                                    field_names=['压力', '速度x', '速度y'])
 

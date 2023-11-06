@@ -49,7 +49,7 @@ class NetFitter(BasicModule):
         models = net_model.to(config.Device)
 
         super(NetFitter, self).__init__(config=config, models=models, params=params)
-        self.config_setup(config)
+        self.config_setup()
 
     @abstractmethod
     def losses(self, batch, *args, **kwargs):
@@ -118,10 +118,10 @@ class NetFitter(BasicModule):
                 batch = train_loaders.batch_preprocess(batch)
                 self.train_step(epoch, batch)
 
+            self.adapt_loss_weights(epoch, batch)
+
             # note: scheduler step should be after one epoch not one batch
             self.scheduler.step()
-
-            self.adapt_loss_weights(epoch)
 
             if epoch % self.config.Logging.log_every_steps == 0:
                 self.models.eval()
@@ -163,14 +163,16 @@ class NetFitter(BasicModule):
         # todo: update loss_dict for each batch like metrics_dict
         self.loss_dict = batch_dict
 
-    def adapt_loss_weights(self, epoch):
+    def adapt_loss_weights(self, epoch, batch):
 
+        self.optimizer.zero_grad()
+        batch_dict = self.losses(batch)
         # Update weights if necessary
         try:
             if epoch % self.config.Training.Weighting.update_every_steps == 0:
                 self.loss_weights, self.adapt_dict = (
                     update_loss_weights(self.loss_weights,
-                                        self.loss_dict,
+                                        batch_dict,
                                         models=self.models,
                                         scheme=self.config.Training.Weighting.scheme,
                                         pred_batch=None,  # todo: the scheme ntk need this args
@@ -179,7 +181,7 @@ class NetFitter(BasicModule):
             Warning("the loss weights are not updated!")
 
 
-    def config_setup(self, config):
+    def config_setup(self):
 
         # self.models.to(config.Device)
         # self.register_states()
@@ -226,24 +228,24 @@ class NetFitter(BasicModule):
         except:
             Warning("the params are not loaded!")
 
-        try:
-            self.optimizer = checkpoint['optimizer']
-        except:
-            Warning("the optimizer are not loaded!")
-        try:
-            self.scheduler = checkpoint['scheduler']
-        except:
-            Warning("the scheduler are not loaded!")
-
-        try:
-            self.loss_funcs = checkpoint['loss_funcs']
-        except:
-            Warning("the loss_funcs are not loaded!")
-
-        try:
-            self.metric_evals = checkpoint['metric_evals']
-        except:
-            Warning("the metrics are not loaded!")
+        # try:
+        #     self.optimizer = checkpoint['optimizer']
+        # except:
+        #     Warning("the optimizer are not loaded!")
+        # try:
+        #     self.scheduler = checkpoint['scheduler']
+        # except:
+        #     Warning("the scheduler are not loaded!")
+        #
+        # try:
+        #     self.loss_funcs = checkpoint['loss_funcs']
+        # except:
+        #     Warning("the loss_funcs are not loaded!")
+        #
+        # try:
+        #     self.metric_evals = checkpoint['metric_evals']
+        # except:
+        #     Warning("the metrics are not loaded!")
 
     def set_optimizer(self, network_params=None):
         assert 'Optim' in self.config, "No Optim config found, the Optimizer are not defined in the config!"

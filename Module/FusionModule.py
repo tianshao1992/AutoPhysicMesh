@@ -38,10 +38,9 @@ class PinnSolver(NetFitter):
                 batch = train_loaders.batch_preprocess(batch)
                 self.train_step(epoch, batch)
 
+            self.adapt_loss_weights(epoch, batch)
             # note: scheduler step should be after one epoch not one batch
             self.scheduler.step()
-
-            self.adapt_loss_weights(epoch)
 
             if epoch % self.config.Logging.log_every_steps == 0:
                 # no need for train batch validation in pinns
